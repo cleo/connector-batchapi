@@ -4,14 +4,14 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.apache.commons.lang3.ArrayUtils;
-
 import com.google.common.base.Charsets;
 
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Objects;
+import java.util.stream.Stream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 
@@ -36,6 +36,19 @@ public class OpenSSLCrypt {
         }
     }
 
+    private static byte[] addAll(byte[]...arrays) {
+        int length = Stream.of(arrays).filter(Objects::nonNull).mapToInt(a->a.length).sum();
+        byte[] result = new byte[length];
+        int offset = 0;
+        for (byte[] array : arrays) {
+            if (array != null) {
+                System.arraycopy(array, 0, result, offset, array.length);
+                offset += array.length;
+            }
+        }
+        return result;
+    }
+
     /**
      *
      * @param password The password / key to encrypt with.
@@ -48,14 +61,14 @@ public class OpenSSLCrypt {
             final byte[] salt = (new SecureRandom()).generateSeed(8);
             final byte[] inBytes = clearText.getBytes(Charsets.UTF_8);
 
-            final byte[] passAndSalt = ArrayUtils.addAll(pass, salt);
+            final byte[] passAndSalt = addAll(pass, salt);
             byte[] hash = new byte[0];
             byte[] keyAndIv = new byte[0];
             for (int i = 0; i < 3 && keyAndIv.length < 48; i++) {
-                final byte[] hashData = ArrayUtils.addAll(hash, passAndSalt);
+                final byte[] hashData = addAll(hash, passAndSalt);
                 final MessageDigest md = MessageDigest.getInstance("MD5");
                 hash = md.digest(hashData);
-                keyAndIv = ArrayUtils.addAll(keyAndIv, hash);
+                keyAndIv = addAll(keyAndIv, hash);
             }
 
             final byte[] keyValue = Arrays.copyOfRange(keyAndIv, 0, 32);
@@ -65,7 +78,7 @@ public class OpenSSLCrypt {
             final Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
             cipher.init(Cipher.ENCRYPT_MODE, key, new IvParameterSpec(iv));
             byte[] data = cipher.doFinal(inBytes);
-            data = ArrayUtils.addAll(ArrayUtils.addAll(SALTED_MAGIC, salt), data);
+            data = addAll(SALTED_MAGIC, salt, data);
             return Base64.getEncoder().encodeToString(data);
         } catch (Exception impossible) {
             throw new RuntimeException(impossible);
@@ -94,15 +107,15 @@ public class OpenSSLCrypt {
 
             final byte[] salt = Arrays.copyOfRange(inBytes, SALTED_MAGIC.length, SALTED_MAGIC.length + 8);
 
-            final byte[] passAndSalt = ArrayUtils.addAll(pass, salt);
+            final byte[] passAndSalt = addAll(pass, salt);
 
             byte[] hash = new byte[0];
             byte[] keyAndIv = new byte[0];
             for (int i = 0; i < 3 && keyAndIv.length < 48; i++) {
-                final byte[] hashData = ArrayUtils.addAll(hash, passAndSalt);
+                final byte[] hashData = addAll(hash, passAndSalt);
                 final MessageDigest md = MessageDigest.getInstance("MD5");
                 hash = md.digest(hashData);
-                keyAndIv = ArrayUtils.addAll(keyAndIv, hash);
+                keyAndIv = addAll(keyAndIv, hash);
             }
 
             final byte[] keyValue = Arrays.copyOfRange(keyAndIv, 0, 32);

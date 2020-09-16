@@ -35,7 +35,6 @@
     <guava.version>26.0-jre</guava.version>
     <commons.cli.version>1.4</commons.cli.version>
     <apache.http.version>4.5.11</apache.http.version>
-    <opencsv.version>5.1</opencsv.version>
     <lombok.version>1.18.12</lombok.version>
     <maven.assembly.plugin.version>3.3.0</maven.assembly.plugin.version>
     <maven.shade.plugin.version>3.2.4</maven.shade.plugin.version>
@@ -83,11 +82,6 @@
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpclient</artifactId>
       <version>${apache.http.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.opencsv</groupId>
-      <artifactId>opencsv</artifactId>
-      <version>${opencsv.version}</version>
     </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>
