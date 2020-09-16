@@ -1,0 +1,24 @@
+---
+type: nativeUser
+alias: Users
+home:
+  enabled: true
+  dir: {}
+  subfolders:
+    default: []
+  access: file
+outgoing:
+  storage: {}
+incoming:
+  storage: {}
+accept:
+  security:
+    requireIPFilter: false
+  ftp:
+    enabled: true
+  sftp:
+    enabled: true
+    prefixHome: false
+  http:
+    enabled: true
+  requireSecurePort: false

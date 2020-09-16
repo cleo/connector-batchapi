@@ -1,0 +1,41 @@
+---
+type: nativeUser
+alias: Users
+home:
+  enabled: true
+  dir:
+    default: local/root/%username%/
+  subfolders:
+    default:
+    - usage: download
+      path: inbox\
+    - usage: upload
+      path: outbox\
+  access: file
+accept:
+  ftp:
+    enabled: true
+  sftp:
+    enabled: true
+  http:
+    enabled: true
+  security:
+    requireIPFilter: false
+    passwordRules:
+      enforce: true
+      minLength: 1
+      cannotContainUserName: false
+      minUpperChars: 0
+      minLowerChars: 0
+      minNumericChars: 0
+      minSpecialChars: 0
+      noRepetitionCount: 0
+      requirePasswordResetBeforeFirstUse: true
+      expiration:
+        enabled: false
+        expiresDays: 60
+      lockout:
+        enabled: false
+        afterFailedAttempts: 5
+        withinSeconds: 60
+        lockoutMinutes: 15

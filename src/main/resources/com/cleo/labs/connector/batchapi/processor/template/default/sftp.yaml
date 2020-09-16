@@ -1,0 +1,37 @@
+---
+- connection: ${alias}
+  type: sftp
+  enabled: true
+  test: false
+  connect:
+    host: ${host}
+    port: ${port}
+    username: ${username}
+    password: ${password}
+  outgoing:
+    storage:
+      outbox: ${outbox}
+      sentbox: ${sentbox}
+  incoming:
+    storage:
+      inbox: ${inbox}
+      receivedbox: ${receivedbox}
+  actions:
+    ${if:CreateSendName}:
+      ${CreateSendName}:
+        alias: ${CreateSendName}
+        commands:
+        - ${for command:ActionSend.split(/;\|/)}: ${command}
+        schedule: ${Schedule_Send=='polling'?'on file continuously':Schedule_Send}
+    ${if:CreateReceiveName}:
+      ${CreateReceiveName}:
+        alias: ${CreateReceiveName}
+        commands:
+        - ${for command:ActionReceive.split(/;\|/)}: ${command}
+        schedule: ${Schedule_Receive=='polling'?'on file continuously':Schedule_Receive}
+    ${for column action:action_([^_]+)_alias}:
+      ${eval('action_'+action+'_alias')}:
+        alias: ${eval('action_'+action+'_alias')}
+        commands:
+        - ${for command:eval('action_'+action+'_commands').split(/;\|/)}: ${command}
+        schedule: ${s=eval('action_'+action+'_schedule');s=='polling'?'on file continuously':s}

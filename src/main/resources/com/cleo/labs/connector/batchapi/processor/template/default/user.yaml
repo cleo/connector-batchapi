@@ -1,0 +1,40 @@
+- username: ${UserID}
+  authenticator: ${Host}
+  email: ${Email}
+  ${if:HostNotes}:
+    notes: ${HostNotes}
+  home:
+    dir:
+      ${if:DefaultHomeDir.toLowerCase()=="yes"}:
+        default: ${CustomHomeDir}
+      ${if:DefaultHomeDir.toLowerCase()!="yes"}:
+        override: ${CustomHomeDir}
+    subfolders:
+      default:
+      - ${for other:OtherFolder.split(';')}:
+          usage: other
+          path: ${other}
+  accept:
+    password: ${Password}
+    whitelist:
+    - ${for ip:WhitelistIP.split(';')}:
+        ipAddress: ${ip}
+  actions:
+    ${if:CreateCollectName}:
+      ${CreateCollectName}:
+        alias: ${CreateCollectName}
+        commands:
+        - ${for command:ActionCollect.split(/;\|/)}: ${command}
+        schedule: ${Schedule_Collect=='polling'?'on file continuously':Schedule_Send}
+    ${if:CreateReceiveName}:
+      ${CreateReceiveName}:
+        alias: ${CreateReceiveName}
+        commands:
+        - ${for command:ActionReceive.split(/;\|/)}: ${command}
+        schedule: ${Schedule_Receive=='polling'?'on file continuously':Schedule_Receive}
+    ${for column action:action_([^_]+)_alias}:
+      ${eval('action_'+action+'_alias')}:
+        alias: ${eval('action_'+action+'_alias')}
+        commands:
+        - ${for command:eval('action_'+action+'_commands').split(/;\|/)}: ${command}
+        schedule: ${s=eval('action_'+action+'_schedule');s=='polling'?'on file continuously':s}

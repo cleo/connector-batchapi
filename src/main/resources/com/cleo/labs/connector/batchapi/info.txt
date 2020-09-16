@@ -1,0 +1,1 @@
+This connector implements a batch API for Harmony using request/response files.
