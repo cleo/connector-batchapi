@@ -610,7 +610,13 @@ The most basic template feature is token replacement. Any field name or scalar v
 
 > `This example shows ${a} and ${b} together` &rarr; `This example shows lions and lambs together`
 
-Whenever a `${token}` appears with other text or tokens, it is converted into a string. If a `${token}` appears all by itself in a value as a _singleton_, in some cases it is necessary to make sure it is rendered as a scalar of a specific type. This can be achieved by appending `:int`, `:boolean` or `:string` to force the appropriate interpretation.
+It is possible for a CSV header to include column names that are not legal JavaScript variable names, for example `Yes/No` or `ID#`. In this case you cannot refer to the token directly:
+
+> `${Yes/No}` &rarr; error!
+
+and instead you must enclose the column name in `this['column name']`:
+
+> `${this['Yes/No']}` &rarr; `Yes` or `No` depending on the column value
 
 #### JavaScript expressions
 
@@ -619,6 +625,9 @@ In fact the `token` is more accurately described as a JavaScript expression. Eve
 > `${a.toUpperCase()}` &rarr; `LIONS`
 >
 > `${a.length}` &rarr; `5`
+
+Whenever an `${expression}` appears with other text or tokens, it is converted into a string. If an `${expression}` appears all by itself in a value as a _singleton_, in some cases it is necessary to make sure it is rendered as a scalar of a specific type. This can be achieved by appending `:int`, `:boolean` or `:string` to force the appropriate interpretation.
+
 
 #### Manipulating tree structure
 

@@ -18,7 +18,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 public class TestMacroEngine {
 
-    static private final boolean DIAGNOSTIC = false;
+    static private final boolean DIAGNOSTIC = true;
 
     @Test
     public void testInt() {
@@ -74,6 +74,8 @@ public class TestMacroEngine {
         data.put("b", "bob");
         engine.data(data);
         assertEquals(4, engine.bindings().size());
+        assertEquals("alice", engine.eval("a"));
+        if (DIAGNOSTIC) System.out.println(engine.bindings().entrySet());
 
         // replace those 2 with 2 more, but one is null
         data.put("a", null);
@@ -83,6 +85,14 @@ public class TestMacroEngine {
         // clear it back to 2
         engine.clear();
         assertEquals(2, engine.bindings().size());
+
+        // add a funny name
+        if (DIAGNOSTIC) System.out.println(engine.bindings());
+        engine.datum("Carrier/Client", "CLIENT");
+        engine.datum("TP#", "TP0");
+        assertEquals(4, engine.bindings().size());
+        assertEquals("TP0", engine.eval("this['TP#']"));
+        if (DIAGNOSTIC) System.out.println(engine.bindings().entrySet());
     }
 
     @Test
