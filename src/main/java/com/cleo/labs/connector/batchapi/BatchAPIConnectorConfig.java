@@ -5,6 +5,8 @@ import java.nio.file.Paths;
 
 import com.cleo.connector.api.interfaces.ConnectorBase;
 import com.cleo.connector.api.property.ConnectorPropertyException;
+import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
+import com.google.common.base.Strings;
 
 public class BatchAPIConnectorConfig {
     private ConnectorBase client;
@@ -39,8 +41,12 @@ public class BatchAPIConnectorConfig {
         return schema.exportPassword.getValue(client);
     }
 
-    public String getDefaultOperation() throws ConnectorPropertyException {
-        return schema.defaultOperation.getValue(client);
+    public Operation getDefaultOperation() throws ConnectorPropertyException {
+        String operation = schema.defaultOperation.getValue(client).trim();
+        if (!Strings.isNullOrEmpty(operation)) {
+            return Operation.valueOf(operation);
+        }
+        return null;
     }
 
     public boolean getIgnoreTLSChecks() throws ConnectorPropertyException {

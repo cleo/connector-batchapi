@@ -37,7 +37,14 @@ import jdk.nashorn.api.scripting.ScriptObjectMirror;
  */
 @SuppressWarnings("restriction")
 public class MacroEngine {
-    private static final ScriptEngineManager engine_factory = new ScriptEngineManager();
+    private static final ScriptEngineManager engine_factory = new ScriptEngineManager(null);
+
+    static {
+        String[] version = System.getProperty("java.version").split("\\.");
+        if (Integer.valueOf(version[0]) > 1 || Integer.valueOf(version[1]) > 8) {
+            System.setProperty("nashorn.args", "--no-deprecation-warning");
+        }
+    }
 
     private ScriptEngine engine;
     private Date now;
@@ -59,10 +66,13 @@ public class MacroEngine {
         if (!started()) {
             // Ensure that System.err is not null because otherwise the Script Engine
             // will fail to initialize
-            if (System.err == null)
+            if (System.err == null) {
                 System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err)));
+            }
 
             engine = engine_factory.getEngineByName("JavaScript");
+            //engine = engine_factory.getEngineByName("nashorn");
+            //engine = new NashornScriptEngineFactory().getScriptEngine();
             engine.eval("load('nashorn:mozilla_compat.js');"
                     + "function date(format) { return new java.text.SimpleDateFormat(format).format(now); }");
             engine.put("now", now);
@@ -76,7 +86,6 @@ public class MacroEngine {
      * 
      */
     public MacroEngine(Map<String, String> data) {
-        System.setProperty("nashorn.args", "--no-deprecation-warning");
         this.now = new Date();
         this.data = data;
     }
@@ -210,7 +219,7 @@ public class MacroEngine {
             String format = Strings.nullToEmpty(date.group(1)) + Strings.nullToEmpty(date.group(2));
             return new SimpleDateFormat(format).format(now);
         } else {
-            if (data.containsKey(name)) {
+            if (data!=null && data.containsKey(name)) {
                 return data.get(name);
             }
         }

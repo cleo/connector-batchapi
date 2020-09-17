@@ -68,8 +68,9 @@ usage: com.cleo.labs.connector.batchapi.processor.Main
  -i,--input <FILE>             input file YAML, JSON or CSV
     --generate-pass            Generate Passwords for users
     --export-pass <PASSWORD>   Password to encrypt generated passwords
-    --operation <OPERATION>    default operation: list, add, update, delete
+    --operation <OPERATION>    default operation: list, add, update, delete or preview
     --include-defaults         include all default values when listing connections
+    --template <TEMPLATE>      load CSV file using provided template
     --profile <PROFILE>        Connection profile to use
     --save                     Save/update profile
     --remove                   Remove profile
@@ -213,24 +214,26 @@ LJBXI_99080-orpug-12738
 
 This table describes the options that control the Batch API utility, both in its command line and Harmony connector packagings. Note that the profile management options are available for the command line only&mdash;in Harmony you create separate connections of type `BatchAPI` to achive the same effect.
 
-Command Line              | Connector         | Description
---------------------------|-------------------|------------
---url <URL>               | Url               | The Harmony URL, e.g. `https://localhost:6080`
--u, --username <USERNAME> | User              | The user authorized to use the Harmony API
--p, --password <PASSWORD> | Password          | The user's password
---generate-pass           | Generate Password | Select to enable password generation for created users
---export-pass <PASSWORD>  | Export Password   | Password used to encrypt generated passwords in the results file
---operation <OPERATION>   | Default Operation | The default operation for entries lacking an explicit "operation"
--k, --insecure            | Ignore TLS Checks | Select to bypass TLS hostname and trusted issuer checks
---profile <PROFILE>       |                   | The named profile to load instead of "default"
---include-defaults        |                   | Include all default values when listing connections
---save                    |                   | Select to create/update named profile (or "default")
---remove                  |                   | Select to remove named profile (or "default")
+Command Line                    | Connector         | Description
+--------------------------------|-------------------|------------
+--url <URL>                     | Url               | The Harmony URL, e.g. `https://localhost:6080`
+-u, --username &lt;USERNAME&gt; | User              | The user authorized to use the Harmony API
+-p, --password &lt;PASSWORD&gt; | Password          | The user's password
+-i, --input &lt;FILE&gt;        | `PUT` file        | input file YAML, JSON or CSV
+--generate-pass                 | Generate Password | Select to enable password generation for created users
+--export-pass &lt;PASSWORD&gt;  | Export Password   | Password used to encrypt generated passwords in the results file
+--operation &lt;OPERATION&gt;   | Default Operation | The default operation for entries lacking an explicit "operation"
+-k, --insecure                  | Ignore TLS Checks | Select to bypass TLS hostname and trusted issuer checks
+--profile &lt;PROFILE&gt;       | &nbsp;            | The named profile to load instead of "default"
+--include-defaults              | &nbsp;            | Include all default values when listing connections
+--template &lt;TEMPLATE&gt;     | &nbsp;            | load CSV file using provided template
+--save                          | &nbsp;            | Select to create/update named profile (or "default")
+--remove                        | &nbsp;            | Select to remove named profile (or "default")
 
 
-## [&LessLess;](#-configuration-reference-) Request Processing [&GreaterGreater;](#-csv-files) ##
+## [&LessLess;](#-configuration-reference-) Request Processing [&GreaterGreater;](#-csv-files-and-templates) ##
 
-### Requests [&gt;](-results-)
+### Requests [&gt;](#-results-)
 
 Regardless of the input format (YAML/JSON or CSV), the input file is processed as a sequence of requests.
 Each request has an _operation_ and an _object type_ to operate on.
@@ -410,7 +413,7 @@ Results for `delete` requests are very similar to those for `list` requests, exc
 
 Bulk delete requests may be applied to sets of objects using a `filter` in the request instead of naming a specific object. One result it reported for each object deleted, with a result message like "deleted user alice (m of n)".
 
-### [&lt;](#-results-) Action Handling [&gt;](#-certificate-handling)
+### [&lt;](#-results-) Action Handling [&gt;](#-certificate-handling-)
 
 In the native Harmony API, actions are a separate resource type, linked to connections, authenticators, and users through `_links`. The batch utility simplifies this processing by treating the set of actions for an object as a separate object nested within the parent object itself:
 
@@ -458,11 +461,298 @@ In order to delete an existing action, create an action with the matching `alias
       - # other commands here
 ```
 
-### [&lt;](#-action-handling-) Certificate Handling [&gt;](-csv-files)
+### [&lt;](#-action-handling-) Certificate Handling [&gt;](#-csv-files-and-templates)
 
 Like actions, certificates in the native Harmony API are handled as a separate linked resource.
 
 The batch utility will be updated to handle certificates as nested objects, but today certificates must be handled outside of the utility.
 
-## [&LessLess;](#-request-processing-) CSV Files
+## [&LessLess;](#-request-processing-) CSV Files and Templates
 
+In many cases involving batch operations, most parts of each request, or at least the request skeleton, are the same.
+The detais for each request can then conveniently be represented in tabular form.
+
+The batch utility supports this mode of operation using CSV files for the tabular data and templates in YAML format.
+The CSV file must have a header, which defines replacement token names for the columns of the table.
+The YAML template encodes requests, much as illustrated above, but with replacement tokens that fill in values from the CSV file, using the replacement token names from the CSV header.
+
+For example, a simple `add` user request:
+
+```
+---
+- username: alice
+  password: password
+  email: alice@cleo.demo
+  authenticator: Users
+```
+
+could be generalized with replacement tokens for username, password, and email with a CSV file:
+
+```
+user,pass,email
+alice,password,alice@cleo.demo
+bob,password,bob@cleo.demo
+```
+
+against the template:
+
+```
+---
+- username: ${user}
+  password: ${pass}
+  email: ${email}
+  authenticator: Users
+```
+
+resulting in the same effect as the following explicit YAML request file:
+
+```
+---
+- username: alice
+  password: password
+  email: alice@cleo.demo
+  authenticator: Users
+- username: bob
+  password: password
+  email: bob@cleo.demo
+  authenticator: Users
+```
+
+Provide a template using the `--template` command line option and `--input` for the CSV file.
+
+### Built-in templates
+
+If you provide a CSV file for `--input` and do not provide an explicit `--template`, the batch utility will attempt to use one of its built-in templates based on an analysis of the content:
+
+* files with a `UserAlias` column in the header use the `authenticator` template
+* files without a `type` column in the header use the `user` template
+* files with a `type` column whose data values are all `as2` use the `as2` template
+* files with a `type` column whose data values are all `sftp` use the `sftp` template
+* files with a `type` column whose data values are all `ftp` use the `ftp` template
+* files with a `type` column whose data values are not all the same cause an error
+
+The built-in templates support the following header columns. You may include them in your CSV file in any order, but keep in mind that the `UserAlias` and `type` columns are essential to the template selection process:
+
+authenticator   | user              | as2               | sftp              | ftp
+----------------|-------------------|-------------------|-------------------|----
+&nbsp;          | &nbsp;            | type              | type              | type
+UserAlias       | Host              | alias             | alias             | alias
+&nbsp;          | &nbsp;            | url               | host              | host
+&nbsp;          | &nbsp;            | &nbsp;            | port              | port
+&nbsp;          | UserID            | AS2From           | username          | username
+&nbsp;          | Password          | AS2To             | password          | password
+FTP             | WhitelistIP       | Subject           | &nbsp;            | channelmode
+SSHFTP          | &nbsp;            | encrypted         | &nbsp;            | activelowport
+HTTP            | &nbsp;            | signed            | &nbsp;            | activehighport
+Access          | Email             | receipt           | &nbsp;            | &nbsp;
+FolderPath      | DefaultHomeDir    | receipt_sign      | &nbsp;            | &nbsp;
+HomeDir         | CustomHomeDir     | receipt_type      | &nbsp;            | &nbsp;
+DownloadFolder  | &nbsp;            | inbox             | inbox             | inbox
+UploadFolder    | &nbsp;            | outbox            | outbox            | outbox
+OtherFolder     | OtherFolder       | &nbsp;            | &nbsp;            | &nbsp;
+ArchiveSent     | &nbsp;            | sentbox           | sentbox           | sentbox
+ArchiveReceived | &nbsp;            | receivedbox       | receivedbox       | receivebox
+&nbsp;          | CreateCollectName | CreateSendName    | CreateSendName    | CreateSendName
+&nbsp;          | ActionCollect     | ActionSend        | ActionSend        | ActionSend
+&nbsp;          | Schedule_Send     | Schedule_Send     | Schedule_Send     | Schedule_Send
+&nbsp;          | CreateReceiveName | CreateReceiveName | CreateReceiveName | CreateReceiveName
+&nbsp;          | ActionReceive     | ActionReceive     | ActionReceive     | ActionReceive
+&nbsp;          | Schedule_Receive  | Schedule_Receive  | Schedule_Receive  | Schedule_Receive
+&nbsp;          | action&lowbar;<i>alias</i>&lowbar;name     |action&lowbar;<i>alias</i>&lowbar;name | action&lowbar;<i>alias</i>&lowbar;name | action&lowbar;<i>alias</i>&lowbar;name
+&nbsp;          | action&lowbar;<i>alias</i>&lowbar;commands | action&lowbar;<i>alias</i>&lowbar;commands | action&lowbar;<i>alias</i>&lowbar;commands | action&lowbar;<i>alias</i>&lowbar;commands
+&nbsp;          | action&lowbar;<i>alias</i>&lowbar;schedule |action&lowbar;<i>alias</i>&lowbar;schedule |action&lowbar;<i>alias</i>&lowbar;schedule | action&lowbar;<i>alias</i>&lowbar;schedule
+&nbsp;          | HostNotes         | &nbsp;            | &nbsp;            | &nbsp;
+
+The user and connection templates provide fixed slots for two actions. The action&lowbar;<i>alias</i>&lowbar;xxx columns allow for an arbitrary number of additional actions to be defined. The action alias is taken from the `name` column: the _alias_ portion in the column name can be the same alias, but is really used only to match up the `name`, `commands` and `schedule` columns for the action (and to keep the sets of columns for additional actions distinct from each other&mdash;you may not have multiple columns with the same header name).
+
+A few columns can be multi-valued:
+
+* `WhitelistIP`: multiple IP addresses separated by `;`
+* `OtherFolder`: multiple custom folder paths separated by `;`
+* action&lowbar;<i>alias</i>&lowbar;commands and other action command script columns: multiple commands separated by `;` or `|`
+
+As a convenience action&lowbar;<i>alias</i>&lowbar;schedule and other action schedule columns accept the shorthand `polling` for the official API schedule `on file continuously`.
+
+Built-in templates can be used for only a single object type per file and a single request per row. You can construct your own templates that can use conditionals and token expressions to create multiple object types from a single CSV, or can create multiple requests per row.
+
+### Advanced template features
+
+#### JSON and YAML
+
+Keep in mind that the Harmony API operates on JSON data. JSON builds three simple concepts into arbitrarily rich data structures. You can think of a JSON data structure as a tree-structured collection of nodes:
+
+* scalar nodes&mdash;strings, numbers (integers and floating point), booleans (true/false) and `null`:<br/>`'string'` or `"string"`, `25`, `3.14`, `true`, `false`, `null`, ...
+* array nodes&mdash;lists of other nodes, including scalars, objects, and other arrays:<br/>`[node, node, node, ...]`
+* object nodes&mdash;sets of named fields, where the names are strings and the values are other nodes, including scalars, arrays, and other objects:<br/>`{"name":node,"name":node,"name":node,...}`
+
+YAML provides an optional alternate representation for arrays and objects, which replaces the `[]` and `{}` syntax with indentation (it also makes the `'` and `"` enclosing strings optional is most cases). Arrays are represented as nodes introduced by `-` at the same indentation level. Objects are represented by `name:` at the same indentation level. Nested arrays and objects are indicated by increasing indenting (by spaces&mdash;tabs are prohibited in YAML) instead of potentially confusing groups of e.g. `{{[{}]}}`.
+
+YAML arrays `[1,2,3]` and `[{"user":"bob","age":42},{"user":"amy","special":true,"details":{"reason":"happy"}}]`:
+
+```
+- 1
+- 2
+- 3
+```
+
+```
+- user: bob
+  age: 42
+- user: amy
+  special: true
+  details:
+    reason: happy
+```
+
+#### Token replacement
+
+The most basic template feature is token replacement. Any field name or scalar value in the tree is scanned for `${token}` blocks, and these are replaced by the corresponding token (or nothing, if the token is not defined or its cell is empty in the CSV file). Multiple `${token}` may appear in a single field name or value. So if `a` is `lions` and `b` is `lambs`:
+
+> `This example shows ${a} and ${b} together` &rarr; `This example shows lions and lambs together`
+
+Whenever a `${token}` appears with other text or tokens, it is converted into a string. If a `${token}` appears all by itself in a value as a _singleton_, in some cases it is necessary to make sure it is rendered as a scalar of a specific type. This can be achieved by appending `:int`, `:boolean` or `:string` to force the appropriate interpretation.
+
+#### JavaScript expressions
+
+In fact the `token` is more accurately described as a JavaScript expression. Every column value is converted into a JavaScript variable (whose name is taken from the column header), so `${a}` is really just evaluating the `a` variable in the JavaScript engine. But other expressions may be used as needed:
+
+> `${a.toUpperCase()}` &rarr; `LIONS`
+>
+> `${a.length}` &rarr; `5`
+
+#### Manipulating tree structure
+
+##### Conditionals: `${if:`
+
+The template expander supports _conditional_ expressions, evaluating a JavaScript expression before expanding a portion of the template. For conditional expansion use the special `${if:expression}` singleton as a field name in the template. If the expression evaluates to a value that is considered true-ish, the value attached to that special field is merged into the parent context.
+
+For `${if` the following are considered true-ish:
+
+* a boolean value of true
+* any non-empty string other than `no`, `none`, `na` or `false` (case insensitive)
+* any non-zero integer (or non-0.0 floating point number)
+* JavaScript `null` is considered `false`
+
+If the condition is satisfied, the value could be any of scalar, object, or array. How this value is merged depends on the parent context of the `${if` field:
+
+* if the `${if` was an element of a parent array, a scalar or object value is added to the parent array, and all elements of any array value are added as (possibly) multiple entries in the parent array (a nested array is _not_ created&mdash;if this is what you need you must wrap the result array in another array).
+* if the `${if` was a field of an object, the value _must_ be an object, and that objects fields are merged into the parent object. Array and scalar values lack any kind of field name under which to merge the values into the parent.
+
+An array example:
+
+```
+---
+- ${if:true}:
+  - 1
+  - 2
+- ${if:true}: 3
+- ${if:false}: 4
+- ${if:true}:
+    result: 5
+- 6
+```
+
+produces
+
+```
+---
+- 1
+- 2
+- 3
+- result: 5
+- 6
+```
+
+An object example:
+
+```
+---
+${if:true}:
+  field1: 1
+  field2: 2
+${if:true&&true}:
+  field3: 3
+fixed4: 4
+${if:false}:
+  result: 5
+fixed6: 6
+```
+
+produces (note the `${if:true&&true}` since a second `${if:true}` would overwrite the first one):
+
+```
+---
+field1: 1
+field2: 2
+field3: 3
+fixed4: 4
+fixed6: 6
+```
+
+##### Loops: `${for:`
+
+The template expander supports looping over template fragments based on either:
+
+* splitting a column value, typically on some separator (see `WhitelistIP` or action commands)
+* matching multiple column headers, for example the action&lowbar;<i>alias</i>&lowbar;xxx columns
+
+Like a conditional, a loop is indicated by a special singleton expression in a field name:
+
+* `${for identifier:expression}` to loop over an expression using column values
+* `${for column identifier:regex}` to loop over column names matching `regex`
+
+Processing is similar to a conditional, except that the value node of the `${for:` field is evaluated once for every value of the `expression` or every match of the `regex`. In these evaluations, a new JavaScript variable is injected into the JavaScript engine using the selected `identifier` (so make sure the chosen `identifier` does not mask one of your column headings). Merging of the results follows the same rules as for conditional values.
+
+The `expression` should be an array expression: the most usual case is something like `${for id:value.split(/;/)}` to separate a multi-valued column value into its parts. Constant arrays can also be used like `${for id:[1,2,3]}`.
+
+The `regex` may have a capture group to map a match subportion of the column name to the bound `identifier`. If no capture groups are defined, the whole column name is used. Only the first capture group is used. For example, the action&lowbar;<i>alias</i>&lowbar;xxx columns are processed in the built-in templates as follows:
+
+```
+- connection: ${alias}
+  ... lots of template goes here ...
+  actions:
+    ${for column action:action_([^_]+)_alias}:
+      ${eval('action_'+action+'_alias')}:
+        alias: ${eval('action_'+action+'_alias')}
+        commands:
+        - ${for command:eval('action_'+action+'_commands').split(/;\|/)}: ${command}
+        schedule: ${s=eval('action_'+action+'_schedule');s=='polling'?'on file continuously':s}
+```
+
+##### Null pruning
+
+As with conditionals, any object field whose value evaluates to `null` is omitted from the template expansion. Any array that then ends up empty or object that ends up with no fields is also omitted. These omissions can propagate up the template tree to omit entire branches if the leaf nodes are not expanded.
+
+For example, in this fragment from the built-in user template:
+
+```
+---
+- username: ${username}
+  ...
+  home:
+    subfolders:
+      default:
+      - ${for other:OtherFolder.split(';')}:
+          usage: other
+          path: ${other}
+```
+
+the entire `subfolders` branch will be pruned if `OtherFolder` is blank or null. But in this example from the authenticator template:
+
+```
+---
+type: nativeUser
+...
+  home:
+  subfolders:
+    default:
+    - ${if:DownloadFolder}:
+        usage: download
+        path: ${DownloadFolder}
+```
+
+the `usage: download` field will prevent the entry in the `default:` array from being pruned, which will then prevent the entire `default:` array and possibly the `subfolders:` field from being pruned. So the `${if:DownloadFolder}:` conditional is needed to force the needed pruning.
+
+#### Testing your template
+
+Use `--operation preview` to test the effects of your template on your CSV data. No API calls will be made to the Harmony API, but the requests will be converted to YAML and displayed directly in the result output with the message "request preview".

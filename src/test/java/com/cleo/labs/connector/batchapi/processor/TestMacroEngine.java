@@ -52,10 +52,6 @@ public class TestMacroEngine {
             result = engine.expand("${a.length>0:boolean}");
             assertTrue(result.isBoolean());
             assertEquals(true, result.asBoolean());
-
-            System.out.println(engine.bindings().keySet().toString());
-            engine.clear();
-            System.out.println(engine.bindings().keySet().toString());
         } catch (Exception e) {
             fail(e.getMessage());
         }
@@ -313,6 +309,64 @@ public class TestMacroEngine {
         assertEquals(1, result.size());
         assertTrue(result.get(0).isTextual());
         assertEquals("3", result.get(0).asText());
+    }
+
+    @Test
+    public void testArrayIf() throws Exception {
+        Map<String,String> data = new HashMap<>();
+        data.put("a", "a");
+        TemplateExpander expander = new TemplateExpander();
+        expander.template("---\n"+
+        "- ${if:true}:\n"+
+        "  - 1\n"+
+        "  - 2\n"+
+        "- ${if:true}: 3\n"+
+        "- ${if:false}: 4\n"+
+        "- ${if:true}:\n"+
+        "    result: 5\n"+
+        "- 6\n");
+        expander.line(data);
+
+        for (TemplateExpander.ExpanderResult result : expander.expand()) {
+            if (result.success()) {
+                assertTrue(result.expanded().isArray());
+                assertEquals(5, result.expanded().size());
+                assertTrue(result.expanded().get(3).isObject()); // the result: 5 node
+                if (DIAGNOSTIC) Json.mapper.writeValue(System.out, result.expanded());
+            } else {
+                if (DIAGNOSTIC) result.exception().printStackTrace();
+                fail(result.exception().getMessage());
+            }
+        }
+    }
+
+    @Test
+    public void testObjectIf() throws Exception {
+        Map<String,String> data = new HashMap<>();
+        data.put("a", "a");
+        TemplateExpander expander = new TemplateExpander();
+        expander.template("---\n"+
+        "${if:true}:\n"+
+        "  field1: 1\n"+
+        "  field2: 2\n"+
+        "${if:true&&true}:\n"+ // can't have ${if:true} again!
+        "  field3: 3\n"+
+        "fixed4: 4\n"+
+        "${if:false}:\n"+
+        "  result: 5\n"+
+        "fixed6: 6\n");
+        expander.line(data);
+
+        for (TemplateExpander.ExpanderResult result : expander.expand()) {
+            if (result.success()) {
+                assertTrue(result.expanded().isObject());
+                assertEquals(5, result.expanded().size());
+                if (DIAGNOSTIC) Json.mapper.writeValue(System.out, result.expanded());
+            } else {
+                if (DIAGNOSTIC) result.exception().printStackTrace();
+                fail(result.exception().getMessage());
+            }
+        }
     }
 
 }

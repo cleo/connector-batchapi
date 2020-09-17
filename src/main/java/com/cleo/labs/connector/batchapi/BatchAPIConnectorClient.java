@@ -1,6 +1,7 @@
 package com.cleo.labs.connector.batchapi;
 
 import static com.cleo.connector.api.command.ConnectorCommandName.ATTR;
+import static com.cleo.connector.api.command.ConnectorCommandName.DELETE;
 import static com.cleo.connector.api.command.ConnectorCommandName.DIR;
 import static com.cleo.connector.api.command.ConnectorCommandName.GET;
 import static com.cleo.connector.api.command.ConnectorCommandName.PUT;
@@ -23,7 +24,9 @@ import com.cleo.connector.api.annotations.Command;
 import com.cleo.connector.api.command.ConnectorCommandResult;
 import com.cleo.connector.api.command.DirCommand;
 import com.cleo.connector.api.command.GetCommand;
+import com.cleo.connector.api.command.OtherCommand;
 import com.cleo.connector.api.command.PutCommand;
+import com.cleo.connector.api.command.ConnectorCommandResult.Status;
 import com.cleo.connector.api.directory.Directory.Type;
 import com.cleo.connector.api.directory.Entry;
 import com.cleo.connector.api.helper.Attributes;
@@ -73,6 +76,25 @@ public class BatchAPIConnectorClient extends ConnectorClient {
         transfer(new FileInputStream(path.toFile()), destination.getStream(), true);
 
         return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
+    }
+
+    @Command(name=DELETE)
+    public ConnectorCommandResult other(OtherCommand delete) throws ConnectorException {
+        String relativepath = delete.getSource();
+        logger.debug(String.format("DELETE '%s'", relativepath));
+
+        Path path = config.getWorkingDirectory().resolve(relativepath);
+        File file = path.toFile();
+        if (!file.exists()) {
+            throw new ConnectorException(String.format("'%s' does not exist or is not accessible", relativepath),
+                    ConnectorException.Category.fileNonExistentOrNoAccess);
+        } else if (!file.isFile()) {
+            return new ConnectorCommandResult(Status.Error, String.format("'%s' is not a file", relativepath));
+        } else if (!file.delete()) {
+            return new ConnectorCommandResult(Status.Error, "Delete failed.");
+        } else {
+            return new ConnectorCommandResult(Status.Success);
+        }
     }
 
     @Command(name = DIR)

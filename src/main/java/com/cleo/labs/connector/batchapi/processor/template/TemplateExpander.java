@@ -236,6 +236,14 @@ public class TemplateExpander {
         return isTrueCondition(node.fieldNames().next());
     }
 
+    private void arrayNodeMerge(ArrayNode result, JsonNode toAdd) {
+        if (toAdd.isArray()) {
+            result.addAll((ArrayNode)toAdd);
+        } else {
+            result.add(toAdd);
+        }
+    }
+
     private JsonNode expand(JsonNode node) throws Exception {
         if (node.isArray()) {
             ArrayNode result = Json.mapper.createArrayNode();
@@ -247,11 +255,11 @@ public class TemplateExpander {
                     String id = values.remove(0);
                     for (int v=0; v<values.size(); v++) {
                         engine.datum(id, values.get(v));
-                        result.add(expand(body));
+                        arrayNodeMerge(result, expand(body));
                     }
                 } else if (isConditional(entry)) {
                     if (isTrueCondition(entry)) {
-                        result.add(expand(entry.elements().next()));
+                        arrayNodeMerge(result, expand(entry.elements().next()));
                     }
                 } else {
                     JsonNode expanded = expand(entry);
@@ -328,6 +336,20 @@ public class TemplateExpander {
         public ExpanderResult() {
             this.expanded = null;
             this.exception = null;
+        }
+        @Override
+        public String toString() {
+            StringBuilder s = new StringBuilder();
+            if (expanded != null) {
+                s.append("expanded to ").append(expanded.toString());
+            }
+            if (exception != null) {
+                if (s.length() > 0) {
+                    s.append(' ');
+                }
+                s.append("exception: ").append(exception.getMessage());
+            }
+            return s.toString();
         }
     }
 

@@ -1,8 +1,10 @@
 package com.cleo.labs.connector.batchapi.processor;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -46,7 +48,8 @@ public class BatchProcessor {
         add ("created"),
         list ("found"),
         update ("updating"),
-        delete ("deleted");
+        delete ("deleted"),
+        preview ("previewed");
 
         private String tag;
         private Operation(String tag) {
@@ -65,10 +68,22 @@ public class BatchProcessor {
         return this;
     }
 
+    public BatchProcessor setTemplate(Path template) {
+        File file = template.toFile();
+        if (!file.exists()) {
+            throw new IllegalArgumentException("template file not found: "+template);
+        } else if (!file.isFile()) {
+            throw new IllegalArgumentException("template file is not a file: "+template);
+        }
+        this.template = template;
+        return this;
+    }
+
     private REST api;
     private EnumSet<Option> options;
     private String exportPassword;
     private Operation defaultOperation;
+    private Path template;
 
     public enum ResourceClass {
         user ("username"),
@@ -900,6 +915,12 @@ public class BatchProcessor {
 	/*- main file processor --------------------------------------------------*/
 
     private void loadTemplate(TemplateExpander expander) throws Exception {
+        // check for an explicit template
+        if (template != null) {
+            expander.template(template);
+            return;
+        }
+
         // check for empty file
         List<Map<String,String>> lines = expander.data();
         if (lines.size() == 0) {
@@ -942,26 +963,28 @@ public class BatchProcessor {
         // load file content into a string
         ArrayNode file = null;
 
-        // Option 1: try to load it as a JSON or YAML file
-        try {
-            JsonNode json = Json.mapper.readTree(content);
-            // file is a list of entries to process:
-            //   convert a single entry file into a list of one
-            if (!json.isArray()) {
-                file = Json.mapper.createArrayNode();
-                file.add(json);
-            } else {
-                file = (ArrayNode)json;
-                json = file.get(0);
+        if (template == null) {
+            // Option 1: try to load it as a JSON or YAML file
+            try {
+                JsonNode json = Json.mapper.readTree(content);
+                // file is a list of entries to process:
+                //   convert a single entry file into a list of one
+                if (!json.isArray()) {
+                    file = Json.mapper.createArrayNode();
+                    file.add(json);
+                } else {
+                    file = (ArrayNode)json;
+                    json = file.get(0);
+                }
+                // now file is an array and json is the first element: test it
+                if (json.isObject()) {
+                    return file;
+                }
+            } catch (Exception notjson) {
+                // try something else
             }
-            // now file is an array and json is the first element: test it
-            if (json.isObject()) {
-                return file;
-            }
-        } catch (Exception notjson) {
-            // try something else
+            file = null;
         }
-        file = null;
 
         // Option 2: see if it can be loaded as CSV
         try {
@@ -1048,6 +1071,9 @@ public class BatchProcessor {
                 // let's go
                 Request request = analyzeRequest(entry, operation);
                 switch (operation) {
+                case preview:
+                    results.add(insertResult(original, true, "request preview"));
+                    break;
                 case add:
                     processAdd(request, actions, results, passwords);
                     break;
@@ -1143,6 +1169,7 @@ public class BatchProcessor {
         this.options = options;
         this.exportPassword = exportPassword;
         this.defaultOperation = Operation.add;
+        this.template = null;
         reset();
     }
 }

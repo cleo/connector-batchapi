@@ -57,8 +57,9 @@ public class BatchAPIProcessor extends FilterOutputStream {
             if (!Strings.isNullOrEmpty(config.getExportPassword())) {
                 processor.setExportPassword(config.getExportPassword());
             }
-            if (!Strings.isNullOrEmpty(config.getDefaultOperation())) {
-                processor.setDefaultOperation(Operation.valueOf(config.getDefaultOperation()));
+            Operation defaultOperation = config.getDefaultOperation();
+            if (defaultOperation != null) {
+                processor.setDefaultOperation(defaultOperation);
             }
         } catch (ConnectorPropertyException ignore) {}
 

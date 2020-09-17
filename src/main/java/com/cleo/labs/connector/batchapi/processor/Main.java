@@ -19,6 +19,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 
+import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -89,13 +90,21 @@ public class Main {
                 .longOpt("operation")
                 .hasArg()
                 .argName("OPERATION")
-                .desc("default operation: list, add, update, delete")
+                .desc("default operation: list, add, update, delete or preview")
                 .required(false)
                 .build());
 
         options.addOption(Option.builder()
                 .longOpt("include-defaults")
                 .desc("include all default values when listing connections")
+                .required(false)
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("template")
+                .hasArg()
+                .argName("TEMPLATE")
+                .desc("load CSV file using provided template")
                 .required(false)
                 .build());
 
@@ -275,13 +284,15 @@ public class Main {
 
         if (cmd.hasOption("input")) {
             REST restClient = null;
-            try {
-                restClient = new REST(profile.getUrl(), profile.getUsername(), profile.getPassword(), profile.isInsecure());
-                restClient.includeDefaults(cmd.hasOption("include-defaults"));
-                restClient.traceRequests(cmd.hasOption("trace-requests"));
-            } catch (Exception e) {
-                System.out.println("Failed to create REST Client: " + e.getMessage());
-                System.exit(-1);
+            if (operation != Operation.preview) {
+                try {
+                    restClient = new REST(profile.getUrl(), profile.getUsername(), profile.getPassword(), profile.isInsecure());
+                    restClient.includeDefaults(cmd.hasOption("include-defaults"));
+                    restClient.traceRequests(cmd.hasOption("trace-requests"));
+                } catch (Exception e) {
+                    System.out.println("Failed to create REST Client: " + e.getMessage());
+                    System.exit(-1);
+                }
             }
             BatchProcessor processor = new BatchProcessor(restClient).set(generatePass, cmd.hasOption("generate-pass"));
             if (!Strings.isNullOrEmpty(profile.getExportPassword())) {
@@ -289,6 +300,9 @@ public class Main {
             }
             if (operation != null) {
                 processor.setDefaultOperation(operation);
+            }
+            if (cmd.hasOption("template")) {
+                processor.setTemplate(Paths.get(cmd.getOptionValue("template")));
             }
             processor.processFiles(cmd.getOptionValues("input"));
         }
