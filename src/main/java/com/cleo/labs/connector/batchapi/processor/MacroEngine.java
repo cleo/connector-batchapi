@@ -109,6 +109,7 @@ public class MacroEngine {
                         engine.put(entry.getKey(), entry.getValue());
                     }
                 }
+                engine.put("column", data);
             }
         }
         return this;
@@ -138,6 +139,7 @@ public class MacroEngine {
             data.put(name, value);
             if (engine != null) {
                 engine.put(name, value);
+                engine.put("column", data);
             }
         }
         return this;
@@ -163,7 +165,7 @@ public class MacroEngine {
         String singleton = m.singleton();
         if (singleton != null) {
             if (singleton.endsWith(INT_SUFFIX)) {
-                int value = Integer.valueOf(expr(singleton.substring(0, singleton.length()-INT_SUFFIX.length())));
+                int value = asInt(singleton.substring(0, singleton.length()-INT_SUFFIX.length()));
                 return IntNode.valueOf(value);
             } else if (singleton.endsWith(BOOLEAN_SUFFIX)) {
                 boolean value = isTrue(singleton.substring(0, singleton.length()-BOOLEAN_SUFFIX.length()));
@@ -178,7 +180,7 @@ public class MacroEngine {
                     return null;
                 }
             } else if (singleton.endsWith(STRING_SUFFIX)) {
-                String value = expr(singleton.substring(0, singleton.length()-STRING_SUFFIX.length()));
+                String value = expr(singleton.substring(0, singleton.length()-STRING_SUFFIX.length())).toString();
                 return TextNode.valueOf(value);
             } else {
                 return asNode(singleton);
@@ -187,7 +189,7 @@ public class MacroEngine {
         } else {
             StringBuilder sb = new StringBuilder();
             while (m.find()) {
-                m.appendReplacement(sb, expr(m.expression()));
+                m.appendReplacement(sb, expr(m.expression()).toString());
             }
             m.appendTail(sb);
             String value = sb.toString();
@@ -202,7 +204,7 @@ public class MacroEngine {
      * {@link Pattern} matching {@code date('...')} with {@code ...} as
      * {@code group(1)} or {@code date("...")} with {@code ...} as {@code group(2)}.
      */
-    public static final Pattern DATEFUNCTION = Pattern.compile("date\\((?:'([^']*)'|\"([^\"]*)\")\\)");
+    private static final Pattern DATEFUNCTION = Pattern.compile("date\\((?:'([^']*)'|\"([^\"]*)\")\\)");
 
     /**
      * Attempts a simple variable lookup for {@code name}, or tries simple
@@ -213,7 +215,7 @@ public class MacroEngine {
      * @return the result, or {@code null} if the input was not a simple variable
      *         name or date expression
      */
-    public String lookup(String name) {
+    private String lookup(String name) {
         Matcher date = DATEFUNCTION.matcher(name);
         if (date.matches()) {
             String format = Strings.nullToEmpty(date.group(1)) + Strings.nullToEmpty(date.group(2));
@@ -234,17 +236,29 @@ public class MacroEngine {
      * @param macro the input expression to evaluate
      * @return the result after lookup or evaluation
      */
-    public String expr(String macro) throws ScriptException {
+    private Object expr(String macro) throws ScriptException {
         // first try just looking up a simple value
         String lookup = lookup(macro);
         if (lookup != null) {
             return lookup;
         }
         // ok, now run the JS engine, starting it if needed
+        return eval(macro);
+    }
+
+    /**
+     * Returns the results of evaluating the input {@code macro} as a JavScript
+     * expression using the JavaScript engine. ReferenceErrors are caught and
+     * interpreted as {@code null} (undefined variables cause this erro). Other
+     * errors are propagated as {@code ScriptException}/
+     * @param expr the input expression to evaluate
+     * @return the result or {@code null}
+     * @throws ScriptException
+     */
+    private Object eval(String expr) throws ScriptException {
         startEngine();
         try {
-            Object result = engine.eval(macro);
-            return result==null ? null : result.toString();
+            return engine.eval(expr);
         } catch (ScriptException e) {
             if (e.getMessage().startsWith("ReferenceError:")) {
                 return null;
@@ -263,9 +277,8 @@ public class MacroEngine {
      *         non-null/empty/0/false value
      */
     public boolean isTrue(String expr) throws ScriptException {
-        startEngine();
         try {
-            Object result = engine.eval(expr);
+            Object result = expr(expr);
             if (result == null) {
                 return false;
             } else if (result instanceof Boolean) {
@@ -284,16 +297,37 @@ public class MacroEngine {
         }
     }
 
-    public JsonNode asNode(String expr) throws ScriptException {
-        // first try just looking up a simple value
-        String lookup = lookup(expr);
-        if (lookup != null) {
-            return TextNode.valueOf(lookup);
-        }
-        // ok, now run the JS engine, starting it if needed
-        startEngine();
+    /**
+     * Returns the result of evaluating the input JavaScript expression and converts
+     * it to an int.
+     *
+     * @param expr a JavaScript expression
+     * @return an int
+     */
+    public int asInt(String expr) throws ScriptException {
         try {
-            Object result = engine.eval(expr);
+            Object result = expr(expr);
+            if (result == null) {
+                return 0;
+            } else if (result instanceof Boolean) {
+                return (Boolean) result ? 1 : 0;
+            } else if (result instanceof String) {
+                return Integer.valueOf(result.toString());
+            } else if (result instanceof Integer) {
+                return (Integer) result;
+            } else if (result instanceof Double) {
+                return ((Double) result).intValue();
+            } else {
+                return 0;
+            }
+        } catch (ScriptException e) {
+            return 0;
+        }
+    }
+
+    public JsonNode asNode(String expr) throws ScriptException {
+        try {
+            Object result = expr(expr);
             if (result == null) {
                 return null;
             } else if (result instanceof Boolean) {
@@ -316,16 +350,7 @@ public class MacroEngine {
     }
 
     public List<String> asArray(String expr) throws ScriptException {
-        startEngine();
-        Object result;
-        try {
-            result = engine.eval(expr);
-        } catch (ScriptException e) {
-            if (e.getMessage().startsWith("ReferenceError:")) {
-                return null;
-            }
-            throw e;
-        }
+        Object result = expr(expr);
         if (result==null) {
             return null;
         }
@@ -350,11 +375,6 @@ public class MacroEngine {
             }
             return Arrays.asList(value);
         }
-    }
-
-    public Object eval(String expr) throws ScriptException {
-        startEngine();
-        return engine.eval(expr);
     }
 
     public Bindings bindings() {

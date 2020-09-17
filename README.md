@@ -614,9 +614,9 @@ It is possible for a CSV header to include column names that are not legal JavaS
 
 > `${Yes/No}` &rarr; error!
 
-and instead you must enclose the column name in `this['column name']`:
+and instead you must enclose the column name in `column['column name']`:
 
-> `${this['Yes/No']}` &rarr; `Yes` or `No` depending on the column value
+> `${column['Yes/No']}` &rarr; `Yes` or `No` depending on the column value
 
 #### JavaScript expressions
 

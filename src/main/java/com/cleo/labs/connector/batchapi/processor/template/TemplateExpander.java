@@ -1,7 +1,6 @@
 package com.cleo.labs.connector.batchapi.processor.template;
 
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.StringReader;
 import java.net.URL;
 import java.nio.file.Files;
@@ -13,7 +12,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import javax.script.ScriptException;
 
@@ -88,14 +86,6 @@ public class TemplateExpander {
     public TemplateExpander clear() {
         data = null;
         return this;
-    }
-
-    public void dump(PrintStream out) {
-        for (Map<String,String> line : data) {
-            out.println(line.entrySet().stream()
-                    .map(entry -> entry.getKey()+"="+entry.getValue())
-                    .collect(Collectors.joining(", ", "{", "}")));
-        }
     }
 
     private static final Pattern LOOP_PATTERN = Pattern.compile("\\$\\{for\\s+(column\\s+)?([a-zA-Z_]\\w*)\\s*:(.*)\\}");
@@ -309,7 +299,8 @@ public class TemplateExpander {
             }
             return result.size() > 0 ? result : null;
         } else {
-            return engine.expand(node.asText());
+            JsonNode x = engine.expand(node.asText());
+            return x;
         }
     }
 

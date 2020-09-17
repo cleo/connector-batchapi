@@ -18,7 +18,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 public class TestMacroEngine {
 
-    static private final boolean DIAGNOSTIC = true;
+    static private final boolean DIAGNOSTIC = false;
 
     @Test
     public void testInt() {
@@ -61,37 +61,35 @@ public class TestMacroEngine {
     public void testClear() throws ScriptException {
         // starts with two bindings: date() and now
         MacroEngine engine = new MacroEngine(null);
-        engine.eval("true"); // force a start
-        assertEquals(2, engine.bindings().size());
+        engine.isTrue("true"); // force a start
+        int empty = engine.bindings().size();
 
         // add one more
         engine.datum("data1", "value1");
-        assertEquals(3, engine.bindings().size());
+        assertEquals(empty+1+1, engine.bindings().size());
 
         // replace that one with 2 more
         Map<String,String> data = new HashMap<>();
         data.put("a", "alice");
         data.put("b", "bob");
         engine.data(data);
-        assertEquals(4, engine.bindings().size());
-        assertEquals("alice", engine.eval("a"));
-        if (DIAGNOSTIC) System.out.println(engine.bindings().entrySet());
+        assertEquals(empty+1+2, engine.bindings().size());
+        assertEquals("alice", engine.asNode("a").asText());
 
         // replace those 2 with 2 more, but one is null
         data.put("a", null);
         engine.data(data);
-        assertEquals(3, engine.bindings().size());
+        assertEquals(empty+1+1, engine.bindings().size());
 
-        // clear it back to 2
+        // clear it back to empty
         engine.clear();
-        assertEquals(2, engine.bindings().size());
+        assertEquals(empty, engine.bindings().size());
 
         // add a funny name
-        if (DIAGNOSTIC) System.out.println(engine.bindings());
         engine.datum("Carrier/Client", "CLIENT");
         engine.datum("TP#", "TP0");
-        assertEquals(4, engine.bindings().size());
-        assertEquals("TP0", engine.eval("this['TP#']"));
+        assertEquals(empty+1+2, engine.bindings().size());
+        assertEquals("TP0", engine.asNode("this['TP#']").asText());
         if (DIAGNOSTIC) System.out.println(engine.bindings().entrySet());
     }
 
@@ -138,7 +136,7 @@ public class TestMacroEngine {
             if (result.success()) {
                 if (DIAGNOSTIC) Json.mapper.writeValue(System.out, result.expanded());
             } else {
-                if (DIAGNOSTIC) result.exception().printStackTrace();
+                if (true) result.exception().printStackTrace();
                 fail(result.exception().getMessage());
             }
         }

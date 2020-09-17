@@ -1,6 +1,5 @@
 package com.cleo.labs.connector.batchapi.processor;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -68,13 +67,11 @@ public class BatchProcessor {
         return this;
     }
 
-    public BatchProcessor setTemplate(Path template) {
-        File file = template.toFile();
-        if (!file.exists()) {
-            throw new IllegalArgumentException("template file not found: "+template);
-        } else if (!file.isFile()) {
-            throw new IllegalArgumentException("template file is not a file: "+template);
-        }
+    public BatchProcessor setTemplate(Path template) throws IOException {
+        return setTemplate(new String(Files.readAllBytes(template), Charsets.UTF_8));
+    }
+
+    public BatchProcessor setTemplate(String template) {
         this.template = template;
         return this;
     }
@@ -83,7 +80,7 @@ public class BatchProcessor {
     private EnumSet<Option> options;
     private String exportPassword;
     private Operation defaultOperation;
-    private Path template;
+    private String template;
 
     public enum ResourceClass {
         user ("username"),
@@ -916,7 +913,7 @@ public class BatchProcessor {
 
     private void loadTemplate(TemplateExpander expander) throws Exception {
         // check for an explicit template
-        if (template != null) {
+        if (!Strings.isNullOrEmpty(template)) {
             expander.template(template);
             return;
         }
@@ -963,7 +960,7 @@ public class BatchProcessor {
         // load file content into a string
         ArrayNode file = null;
 
-        if (template == null) {
+        if (Strings.isNullOrEmpty(template)) {
             // Option 1: try to load it as a JSON or YAML file
             try {
                 JsonNode json = Json.mapper.readTree(content);
@@ -1054,9 +1051,16 @@ public class BatchProcessor {
 
         Iterator<JsonNode> elements = file.elements();
         while (elements.hasNext()) {
-            ObjectNode entry = (ObjectNode)elements.next();
-            ObjectNode original = entry.deepCopy();
+            // pull the next element and make sure it's an object
+            JsonNode element = elements.next();
+            if (!element.isObject()) {
+                results.add(insertResult(Json.setSubElement(null, "result.request", element.toString()), false, "invalid request"));
+                continue;
+            }
+            // process the request
+            ObjectNode original = (ObjectNode)element;
             try {
+                ObjectNode entry = (ObjectNode)(original.deepCopy());
                 Operation operation = entry.has("operation")
                         ? Operation.valueOf(Json.asText(entry.remove("operation")))
                         : defaultOperation;

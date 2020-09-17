@@ -61,6 +61,10 @@ public class BatchAPIProcessor extends FilterOutputStream {
             if (defaultOperation != null) {
                 processor.setDefaultOperation(defaultOperation);
             }
+            String template = config.getTemplate();
+            if (!Strings.isNullOrEmpty(template)) {
+                processor.setTemplate(template);
+            }
         } catch (ConnectorPropertyException ignore) {}
 
         String content = bytes.toString();

@@ -15,6 +15,7 @@ import com.cleo.connector.api.interfaces.IConnectorProperty;
 import com.cleo.connector.api.property.CommonProperties;
 import com.cleo.connector.api.property.CommonProperty;
 import com.cleo.connector.api.property.PropertyBuilder;
+import com.cleo.connector.common.ConfigFileImport;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
@@ -78,6 +79,14 @@ public class BatchAPIConnectorSchema extends ConnectorConfig {
             .setAllowedInSetCommand(true)
             .addPossibleValues("", Operation.list.name(), Operation.add.name(), Operation.update.name(), Operation.delete.name())
             .setGroup(Connect)
+            .build();
+
+    @Property
+    final IConnectorProperty<String> template = new PropertyBuilder<>("Template", "")
+            .setDescription("Explicit template to use when processing files")
+            .setGroup(Connect)
+            .setExtendedClass(ConfigFileImport.class)
+            .setRequired(false)
             .build();
 
     @Property
