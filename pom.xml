@@ -25,6 +25,17 @@
         <enabled>true</enabled>
       </snapshots>
     </repository>
+    <repository>
+      <id>cleo_repo</id>
+      <name>Cleo's Repository</name>
+      <url>http://contd.cleo.com/nexus/content/groups/public/</url>
+      <releases>
+        <updatePolicy>never</updatePolicy>
+      </releases>
+      <snapshots>
+        <updatePolicy>daily</updatePolicy>
+      </snapshots>
+    </repository>
   </repositories>
 
   <properties>
@@ -82,6 +93,12 @@
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpclient</artifactId>
       <version>${apache.http.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.cleo.product</groupId>
+      <artifactId>LexiCom</artifactId>
+      <version>${cleo.version}</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>

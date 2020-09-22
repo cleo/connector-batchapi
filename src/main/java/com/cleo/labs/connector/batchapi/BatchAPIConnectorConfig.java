@@ -39,7 +39,7 @@ public class BatchAPIConnectorConfig {
     }
 
     public String getExportPassword() throws ConnectorPropertyException {
-        return schema.exportPassword.getValue(client);
+        return schema.exportPassword.getValue(client).trim();
     }
 
     public Operation getDefaultOperation() throws ConnectorPropertyException {

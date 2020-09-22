@@ -5,12 +5,14 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Strings;
 
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -50,12 +52,39 @@ public class OpenSSLCrypt {
     }
 
     /**
+     * Folds a string into lines of no more than 64 characters
+     * by inserting newlines. Note that openssl's base64
+     * decoder seems to work only with folded output.
+     * @param s the string to fold
+     * @return the folded string
+     */
+    public static String fold(String s) {
+        return unfold(s).replaceAll(".{64}", "$0\n");
+    }
+
+    /**
+     * Unfolds a possibly folded string by removing all
+     * whitespace, including newlines, carriage returns,
+     * and other whitespace as defined by {@link Pattern}.
+     * @param s the string to unfold
+     * @return the unfolded string
+     */
+    public static String unfold(String s) {
+        return s.replaceAll("\\s", "");
+    }
+
+    /**
      *
      * @param password The password / key to encrypt with.
      * @param data     The data to encrypt
      * @return A base64 encoded string containing the encrypted data.
      */
     public static String encrypt(String password, String clearText) {
+        if (Strings.isNullOrEmpty(password)) {
+            return clearText;
+        } else if (clearText == null) {
+            return clearText;
+        }
         try {
             final byte[] pass = password.getBytes(Charsets.US_ASCII);
             final byte[] salt = (new SecureRandom()).generateSeed(8);
@@ -91,18 +120,23 @@ public class OpenSSLCrypt {
      *      implementation
      * @param password
      * @param source   The encrypted data
-     * @return
+     * @return the decrypted data, or the original source if decryption fails
      */
     public static String decrypt(String password, String source) {
+        if (Strings.isNullOrEmpty(password)) {
+            return source;
+        } else if (source == null) {
+            return null;
+        }
         try {
             final byte[] pass = password.getBytes(Charsets.US_ASCII);
 
-            final byte[] inBytes = Base64.getDecoder().decode(source);
+            final byte[] inBytes = Base64.getDecoder().decode(unfold(source));
 
             final byte[] shouldBeMagic = Arrays.copyOfRange(inBytes, 0, SALTED_MAGIC.length);
             if (!Arrays.equals(shouldBeMagic, SALTED_MAGIC)) {
-                throw new IllegalArgumentException(
-                        "Initial bytes from input do not match OpenSSL SALTED_MAGIC salt value.");
+                return source;
+                //throw new IllegalArgumentException("Initial bytes from input do not match OpenSSL SALTED_MAGIC salt value.");
             }
 
             final byte[] salt = Arrays.copyOfRange(inBytes, SALTED_MAGIC.length, SALTED_MAGIC.length + 8);
@@ -127,8 +161,8 @@ public class OpenSSLCrypt {
             cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
             final byte[] clear = cipher.doFinal(inBytes, 16, inBytes.length - 16);
             return new String(clear, Charsets.UTF_8);
-        } catch (Exception impossible) {
-            throw new RuntimeException(impossible);
+        } catch (Exception problem) {
+            return source;
         }
     }
 }

@@ -17,6 +17,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.cleo.labs.connector.batchapi.processor.template.TemplateExpander;
+import com.cleo.labs.connector.batchapi.processor.versalex.StubVersaLex;
+import com.cleo.labs.connector.batchapi.processor.versalex.VersaLex;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -81,6 +83,17 @@ public class BatchProcessor {
     private String exportPassword;
     private Operation defaultOperation;
     private String template;
+    private VersaLex versalex;
+
+    private void loadVersaLex() {
+        try {
+            Class<?> clazz = Class.forName("com.cleo.labs.connector.batchapi.processor.versalex.RealVersaLex");
+            Object object = clazz.newInstance();
+            versalex = VersaLex.class.cast(object);
+        } catch (Throwable e) {
+            versalex = new StubVersaLex();
+        }
+    }
 
     public enum ResourceClass {
         user ("username"),
@@ -199,9 +212,7 @@ public class BatchProcessor {
         //   email: email
         //   password: encrypted password
         String password = Json.getSubElement(entry, "accept.password").asText();
-        String encrypted = Strings.isNullOrEmpty(exportPassword)
-                ? password
-                : OpenSSLCrypt.encrypt(exportPassword, password);
+        String encrypted = OpenSSLCrypt.encrypt(exportPassword, password);
         ObjectNode result = Json.mapper.createObjectNode();
         result.put("authenticator", authenticator);
         result.put("username", entry.get("username").asText());
@@ -213,14 +224,42 @@ public class BatchProcessor {
     private ObjectNode updateResource(ObjectNode object, ObjectNode updates) throws Exception {
         String type = Json.getSubElementAsText(object, "meta.resourceType", "");
         ObjectNode updated = object.deepCopy();
+        String pwdhash = null;
+        String password = null;
         if (type.equals("user")) {
             updated.remove("authenticator"); // this is used as the authenticator alias, which isn't present in the real API
             updates.remove("authenticator");
+            pwdhash = Json.asText(updates.remove("pwdhash"));
+        } else if (type.equals("connection")) {
+            // if the existing image has a password, make sure it goes back in decrypted
+            String p = Json.getSubElementAsText(updated, "connect.password");
+            if (p != null) {
+                Json.setSubElement(updated, "connect.password", versalex.decrypt(p));
+                password = p; // now password is decrypted original, if available
+            }
+            // likewise if the update has a password make sure it is decrypted
+            p = Json.getSubElementAsText(updates, "connect.password");
+            if (p != null) {
+                Json.setSubElement(updates, "connect.password", OpenSSLCrypt.decrypt(exportPassword, p));
+                password = p; // now password is decrypted update, if available
+            }
         }
         JsonNode actions = updated.remove("actions");
         updated.setAll(updates);
         cleanup(updated);
         ObjectNode result = api.put(updated, object);
+        if (type.equals("user")) {
+            result = listUser(result);
+            if (pwdhash != null) {
+                versalex.set(Json.getSubElementAsText(result, "authenticator"),
+                        Json.getSubElementAsText(result, "username"), "Pwdhash", pwdhash);
+            }
+        } else if (type.equals("connection")) {
+            if (password != null) {
+                // encrypt it into the result
+                Json.setSubElement(result, "connect.password", OpenSSLCrypt.encrypt(exportPassword, password));
+            }
+        }
         if (actions != null) {
             result.set("actions", actions);
         }
@@ -334,13 +373,18 @@ public class BatchProcessor {
         if (!authenticatorlink.isMissingNode()) {
             ObjectNode authenticator = api.get(Json.getSubElementAsText(authenticatorlink, "href"));
             String alias = Json.getSubElementAsText(authenticator, "alias");
+            String username = Json.getSubElementAsText(user, "username");
+            String pwdhash = versalex.get(alias, username, "Pwdhash");
             if (alias != null) {
                 // set host, but reorder things to get it near the top
                 ObjectNode update = Json.mapper.createObjectNode();
                 update.set("id", user.get("id"));
-                update.set("username", user.get("username"));
+                update.put("username", username);
                 update.set("email",  user.get("email"));
                 update.put("authenticator", alias);
+                if (!Strings.isNullOrEmpty(pwdhash)) {
+                    update.put("pwdhash", pwdhash);
+                }
                 update.setAll(user);
                 user = update;
             }
@@ -400,7 +444,6 @@ public class BatchProcessor {
             throw new ProcessingException("filter \""+request.resourceFilter+"\" returned no connections");
         }
         for (int i = 0; i<list.size(); i++) {
-            list.get(i).set("connection", list.get(i).remove("alias"));
             list.set(i, listConnection(list.get(i)));
         }
         return list;
@@ -411,11 +454,16 @@ public class BatchProcessor {
         if (connection == null) {
             throw new ProcessingException("connection "+request.resource+" not found");
         }
-        connection.set("connection", connection.remove("alias"));
         return listConnection(connection);
     }
 
     private ObjectNode listConnection(ObjectNode connection) throws Exception {
+        String alias = Json.asText(connection.remove("alias"));
+        String password = versalex.decrypt(versalex.get(alias, "password"));
+        connection.put("connection", alias);
+        if (!Strings.isNullOrEmpty(password)) {
+            Json.setSubElement(connection, "connect.password", OpenSSLCrypt.encrypt(exportPassword, password));
+        }
         return injectActions(connection);
     }
 
@@ -624,14 +672,18 @@ public class BatchProcessor {
             results.add(insertResult(authenticator, true, String.format("created authenticator %s with default template", alias)));
         }
         // Create user
-        if (options.contains(Option.generatePass)) {
+        String pwdhash = Json.asText(request.entry.remove("pwdhash"));
+        if (pwdhash != null || options.contains(Option.generatePass)) {
             Json.setSubElement(request.entry, "accept.password", generatePassword());
         }
         ObjectNode user = api.createUser(request.entry, authenticator);
         if (user == null) {
             throw new ProcessingException("user not created");
         }
-        if (options.contains(Option.generatePass)) {
+        if (pwdhash != null) {
+            versalex.set(alias, request.resource, "Pwdhash", pwdhash);
+            user.put("pwdhash", pwdhash);
+        } else if (options.contains(Option.generatePass)) {
             passwords.add(generatedPassword(alias, request.entry));
         }
         if (actions != null) {
@@ -658,11 +710,21 @@ public class BatchProcessor {
 
     private ObjectNode processAddConnection(Request request, ObjectNode actions, ArrayNode results) throws Exception {
         request.entry.set("alias", request.entry.remove("connection"));
+        // decrypt the password if it's encrypted
+        String password = OpenSSLCrypt.decrypt(exportPassword,
+                Json.getSubElementAsText(request.entry, "connect.password"));
+        if (password != null) {
+            Json.setSubElement(request.entry, "connect.password", password);
+        }
         ObjectNode connection = api.createConnection(request.entry);
         if (connection == null) {
             throw new ProcessingException("error: connection not created");
         }
         connection.set("connection", connection.remove("alias"));
+        if (password != null) {
+            // protect the password in the result output, even if it was clearText in the request
+            Json.setSubElement(connection, "connect.password", OpenSSLCrypt.encrypt(exportPassword, password));
+        }
         api.deleteActions(connection);
         if (actions != null) {
             createActions(actions, connection);
@@ -1174,6 +1236,7 @@ public class BatchProcessor {
         this.exportPassword = exportPassword;
         this.defaultOperation = Operation.add;
         this.template = null;
+        loadVersaLex();
         reset();
     }
 }
