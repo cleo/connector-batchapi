@@ -219,7 +219,7 @@ public class REST {
                     httpGet.addHeader("Authorization", "Bearer " + authToken);
                 }
                 if (traceRequests) {
-                    System.err.println("GET "+uri.toString());
+                    System.err.println("GET "+uri.toString().replaceFirst("^.*?[^/](?=/[^/])", ""));
                 }
                 HttpResponse response = httpClient.execute(httpGet);
                 int responseCode = response.getStatusLine().getStatusCode();
