@@ -874,29 +874,46 @@ public class BatchProcessor {
 	/*- request analyzer -----------------------------------------------------*/
 
     public static class Request {
-        public ResourceClass resourceClass = null;
-        public String resourceType = null;
-        public String resource = null;
-        public String resourceFilter = null;
-        public ObjectNode entry = null;
-        public Operation operation = null;
+        public ResourceClass resourceClass = null;  // indicates API endpoint: authenticator, user, connection
+        public String resourceType = null;          // specific resource type, or generic type (same as class)
+        public String resource = null;              // the resource name (username or alias in the API)
+        public String resourceFilter = null;        // filter if using one
+        public ObjectNode entry = null;             // edited/cleaned up entry to query on
+        public ObjectNode actions = null;           // actions separated out from entry and cleaned up
+        public Operation operation = null;          // the operation
     }
 
-    public Request analyzeRequest(ObjectNode entry, Operation operation) throws ProcessingException {
+    private static final Set<Operation> FILTERABLE = EnumSet.of(Operation.list, Operation.delete, Operation.update);
+
+    public Request analyzeRequest(ObjectNode original) throws Exception {
         Request request = new Request();
-        request.entry = entry;
-        request.operation = operation;
+
+        // make a copy of the original to edit and process in the request
+        request.entry = (ObjectNode)(original.deepCopy());
+
+        // figure out the requested operation
+        request.operation = request.entry.has("operation")
+                ? Operation.valueOf(Json.asText(request.entry.remove("operation")))
+                : defaultOperation;
+        boolean filterable = FILTERABLE.contains(request.operation);
+        boolean adding = request.operation == Operation.add;
+
+        // collect actions into an ObjectNode
+        request.actions = normalizeActions(request.entry.remove("actions"));
+        // remove other stuff that might be from a reflected result
+        request.entry.remove("result");
+        request.entry.remove("id");
 
         // see if there is a filter (and remove it from the entry)
-        request.resourceFilter = Json.asText(entry.remove("filter"));
-        boolean filterable = operation == Operation.list || operation == Operation.delete || operation == Operation.update;
+        request.resourceFilter = Json.asText(request.entry.remove("filter"));
         if (request.resourceFilter != null && !filterable) {
-            throw new ProcessingException("\"filter\" valid only for list and delete");
+            throw new ProcessingException("\"filter\" valid only for list, update and delete");
         }
 
         // look for the resource name under username/authenticator/connection
+        // if found we will know resourceClass and resource (name)
         for (ResourceClass r : EnumSet.allOf(ResourceClass.class)) {
-            request.resource = Json.getSubElementAsText(entry, r.tag());
+            request.resource = Json.getSubElementAsText(request.entry, r.tag());
             if (request.resource != null) {
                 request.resourceClass = r;
                 break;
@@ -915,7 +932,7 @@ public class BatchProcessor {
 
         // resourceType: if there is no name, try resolving based on type
         // note that blank/missing type works only for "user"
-        request.resourceType = Json.getSubElementAsText(entry, "type",
+        request.resourceType = Json.getSubElementAsText(request.entry, "type",
                 request.resourceClass == null ? null : request.resourceClass.name());
 
         if (request.resourceType == null) {
@@ -932,7 +949,7 @@ public class BatchProcessor {
             } else if (request.resourceClass != ResourceClass.authenticator) {
                 throw new ProcessingException("\"type\":\""+request.resourceType+"\" incompatible with \""+request.resourceClass.tag()+"\"");
             }
-            if (operation == Operation.add && request.resourceType.equals("authenticator")) {
+            if (adding && request.resourceType.equals("authenticator")) {
                 throw new ProcessingException("generic type \"authenticator\" not valid for add: use specific type");
             }
         } else {
@@ -941,13 +958,13 @@ public class BatchProcessor {
             } else if (request.resourceClass != ResourceClass.connection) {
                 throw new ProcessingException("\"type\":\""+request.resourceType+"\" incompatible with \""+request.resourceClass.tag()+"\"");
             }
-            if (operation == Operation.add && request.resourceType.equals("connection")) {
+            if (adding && request.resourceType.equals("connection")) {
                 throw new ProcessingException("generic type \"connection\" not valid for add: use specific type");
             }
         }
 
         // if there specific resource type for a list/delete, update filter
-        if (request.operation != Operation.add && request.operation != Operation.update
+        if ((request.operation == Operation.list || request.operation == Operation.delete)
                 && !request.resourceType.equals(request.resourceClass.name())) {
             if (!Strings.isNullOrEmpty(request.resourceFilter)) {
                 request.resourceFilter = "("+request.resourceFilter+") and ";
@@ -965,7 +982,7 @@ public class BatchProcessor {
 
         // remove the fake "user" type
         if (request.resourceClass == ResourceClass.user) {
-            entry.remove("type");
+            request.entry.remove("type");
         }
 
         return request;
@@ -1122,26 +1139,13 @@ public class BatchProcessor {
             // process the request
             ObjectNode original = (ObjectNode)element;
             try {
-                ObjectNode entry = (ObjectNode)(original.deepCopy());
-                Operation operation = entry.has("operation")
-                        ? Operation.valueOf(Json.asText(entry.remove("operation")))
-                        : defaultOperation;
-                // collect actions into an ObjectNode
-                ObjectNode actions = normalizeActions(entry.remove("actions"));
-                // remove other stuff that might be from a reflected result
-                entry.remove("result");
-                entry.remove("id");
-                if (entry.isEmpty()) {
-                    continue;
-                }
-                // let's go
-                Request request = analyzeRequest(entry, operation);
-                switch (operation) {
+                Request request = analyzeRequest(original);
+                switch (request.operation) {
                 case preview:
                     results.add(insertResult(original, true, "request preview"));
                     break;
                 case add:
-                    processAdd(request, actions, results, passwords);
+                    processAdd(request, request.actions, results, passwords);
                     break;
                 case list:
                     {
@@ -1156,10 +1160,8 @@ public class BatchProcessor {
                         List<ObjectNode> toUpdate = processList(request, tempResults);
                         for (int i=0; i<toUpdate.size(); i++) {
                             try {
-                                ObjectNode updated = updateResource(toUpdate.get(i), entry);
-                                if (actions != null) {
-                                    createActions(actions, updated);
-                                }
+                                ObjectNode updated = updateResource(toUpdate.get(i), request.entry);
+                                createActions(request.actions, updated);
                                 results.add(tempResults.get(i));
                                 String message = String.format("%s %s updated",
                                     request.resourceClass.name(), getObjectName(updated));
@@ -1188,7 +1190,7 @@ public class BatchProcessor {
                     }
                     break;
                 default:
-                    throw new ProcessingException("operation "+operation+" not supported");
+                    throw new ProcessingException("operation "+request.operation+" not supported");
                 }
             } catch (Exception e) {
                 results.add(insertResult(original, false, e));
