@@ -631,7 +631,7 @@ Whenever an `${expression}` appears with other text or tokens, it is converted i
 
 #### Manipulating tree structure
 
-##### Conditionals: `${if:`
+##### Conditionals: `${if:`, `${else if:` and `${else}`
 
 The template expander supports _conditional_ expressions, evaluating a JavaScript expression before expanding a portion of the template. For conditional expansion use the special `${if:expression}` singleton as a field name in the template. If the expression evaluates to a value that is considered true-ish, the value attached to that special field is merged into the parent context.
 
@@ -679,7 +679,7 @@ An object example:
 ${if:true}:
   field1: 1
   field2: 2
-${if:true&&true}:
+${if again:true}:
   field3: 3
 fixed4: 4
 ${if:false}:
@@ -687,7 +687,7 @@ ${if:false}:
 fixed6: 6
 ```
 
-produces (note the `${if:true&&true}` since a second `${if:true}` would overwrite the first one):
+produces:
 
 ```
 ---
@@ -697,6 +697,11 @@ field3: 3
 fixed4: 4
 fixed6: 6
 ```
+
+Notice that the previous example uses `${if:true}` and `${if again:true}`. Since the template is converted to a JSON object whose keys must be unique, two `${if:true}` at the same level is invalid (or more precisely, the second one overwrites the first and you get an unintended result). To allow you to make your conditional expressions unique, you may add additional text between the `if` or `else` and the `:` (or `}` for just plain `${else}`, which is where this potential problem is mostly likely to arise).
+
+After a `${if:}` expression you can follow with additional `${if:` expressions, or `${else if:` or `${else}` expressions. `${else if:` and `${else}` must appear at the same level in the template as a preceding `${if:`.
+It is permitted to nest `${if:`/`${else if:`/`${else}` sequences deeper in the template.
 
 ##### Loops: `${for:`
 

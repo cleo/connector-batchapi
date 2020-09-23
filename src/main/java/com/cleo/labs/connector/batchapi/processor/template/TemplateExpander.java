@@ -33,29 +33,76 @@ public class TemplateExpander {
     private JsonNode template;
     private List<Map<String,String>> data;
 
+    /*-- constructors --------------------------------------------------------*/
+
+    /**
+     * Constructs a new TemplateExpander with a default {@link MacroEngine}
+     * that is initialized without any data loaded.
+     */
     public TemplateExpander() {
         this(new MacroEngine(null));
     }
 
+    /**
+     * Constructs a new TemplateExpander using the supplied {@link MacroEngine}.
+     * @param engine the {@code MacroEngine} to use
+     */
     public TemplateExpander(MacroEngine engine) {
         this.engine = engine;
         this.data = null;
         this.template = null;
     }
 
+    /*-- the template --------------------------------------------------------*/
+
+    /**
+     * Load a YAML template by parsing it from a String.
+     * @param content the String to parse.
+     * @return {@code this} for fluent style setup
+     * @throws IOException
+     */
     public TemplateExpander template(String content) throws IOException {
         this.template = Json.mapper.readTree(content);
         return this;
     }
 
+    /**
+     * Load a YAML template by parsing it from a file Path.
+     * @param path the Path of the file to load
+     * @return {@code this} for fluent style setup
+     * @throws IOException
+     */
     public TemplateExpander template(Path path) throws IOException {
         return template(new String(Files.readAllBytes(path), Charsets.UTF_8));
     }
 
+    /**
+     * Load a YAML template by parsing it from a resource, for example:
+     * <pre>
+     * template(MyClass.class.getResource("template.yaml"));
+     * </pre>
+     * @param path the URL of the resource to load
+     * @return {@code this} for fluent style setup
+     * @throws IOException
+     */
     public TemplateExpander template(URL resource) throws IOException {
         return template(Resources.toString(resource, Charsets.UTF_8));
     }
 
+    /*-- the data ------------------------------------------------------------*
+     * The core model for the TemplateExpander is expanding a sequence of     *
+     * "lines" parsed from a CSV file, each line represented as a Map whose   *
+     * keys come from the column headings and values come from the CSV line.  *
+     * The Expander Iterator/Iterable iterates over these "lines", resetting  *
+     * the data in the MacroEngine for each line.                             *
+     *----------- ------------------------------------------------------------*/
+
+    /**
+     * Set/replace the data lines by parsing CSV content from a String.
+     * @param content the String to parse as a CSV file
+     * @return {@code this} for fluent style setup
+     * @throws IOException
+     */
     public TemplateExpander loadCsv(String content) throws IOException {
         CsvMapper mapper = new CsvMapper();
         CsvSchema schema = CsvSchema.emptySchema().withHeader();
@@ -67,10 +114,21 @@ public class TemplateExpander {
         return this;
     }
 
+    /**
+     * Set/replace the data lines by parsing CSV content from a file Path
+     * @param path the Path of the file to parse as CSV
+     * @return {@code this} for fluent style setup
+     * @throws IOException
+     */
     public TemplateExpander loadCsv(Path path) throws IOException {
         return loadCsv(new String(Files.readAllBytes(path), Charsets.UTF_8));
     }
 
+    /**
+     * Add a single additional line of data from a Map.
+     * @param line the Map representing the CSV line
+     * @return {@code this} for fluent style setup
+     */
     public TemplateExpander line(Map<String,String> line) {
         if (data == null) {
             data = new ArrayList<>();
@@ -79,16 +137,30 @@ public class TemplateExpander {
         return this;
     }
 
+    /**
+     * Getter providing direct access to the underlying data
+     * (it's mutable, so be careful -- someday maybe it will
+     * be a copy, so don't count on it or break anything!)
+     * @return the underlying data
+     */
     public List<Map<String,String>> data() {
         return data;
     }
 
+    /**
+     * Clears the data.
+     * @return {@code this} for fluent style setup
+     */
     public TemplateExpander clear() {
         data = null;
         return this;
     }
 
+    /*-- the expander internal implementation --------------------------------*/
+
     private static final Pattern LOOP_PATTERN = Pattern.compile("\\$\\{for\\s+(column\\s+)?([a-zA-Z_]\\w*)\\s*:(.*)\\}");
+    private static final Pattern IF_PATTERN = Pattern.compile("\\$\\{(?:(else\\s+)?if(?:\\s[^:]*)?:(.*)|else(?:\\s.*)?)\\}");
+    private static final Pattern VAR_PATTERN = Pattern.compile("\\$\\{var\\s+([a-zA-Z_]\\w*)\\s*}");
 
     /**
      * Looks for a singleton expression of one of the following looping forms:
@@ -99,13 +171,8 @@ public class TemplateExpander {
      * @return {@code true} if it matches a looping form
      */
     private static boolean isLoop(String key) {
-        if (new SquiggleMatcher(key).singleton() != null) {
-            Matcher m = LOOP_PATTERN.matcher(key);
-            if (m.matches()) {
-                return true;
-            }
-        }
-        return false;
+        return new SquiggleMatcher(key).singleton() != null &&
+            LOOP_PATTERN.matcher(key).matches();
     }
 
     /**
@@ -178,7 +245,34 @@ public class TemplateExpander {
         return loopValues(node.fieldNames().next());
     }
 
-    private static final String IF_PREFIX = "${if:";
+    private static class ElseTracker {
+        private boolean conditionOpen = false;
+        private boolean conditionSatisfied = false;
+        public boolean checkIf() {
+            // ${if} is always ok and starts a new condition block
+            conditionOpen = true;
+            conditionSatisfied = false;
+            return true;
+        }
+        public boolean checkElseIf() throws ProcessingException {
+            // ${else if} requires an open condition and leaves it open
+            if (!conditionOpen) {
+                throw new ProcessingException("${if} required before ${else if}");
+            }
+            return !conditionSatisfied;
+        }
+        public boolean checkElse() throws ProcessingException {
+            // ${else} requires an open condition but closes it
+            if (!conditionOpen) {
+                throw new ProcessingException("${if} required before ${else}");
+            }
+            conditionOpen = false;
+            return !conditionSatisfied;
+        }
+        public void satisfy() {
+            conditionSatisfied = true;
+        }
+    }
 
     /**
      * Looks for a singleton expression of the form ${if:expression}.
@@ -186,7 +280,8 @@ public class TemplateExpander {
      * @return true for conditional keys
      */
     private static boolean isConditional(String key) {
-        return new SquiggleMatcher(key).singleton() != null && key.startsWith(IF_PREFIX);
+        return new SquiggleMatcher(key).singleton() != null &&
+            IF_PATTERN.matcher(key).matches();
     }
 
     /**
@@ -208,11 +303,41 @@ public class TemplateExpander {
      * @param key the key expression to evaluate
      * @return {@code true} if it evaluates to true
      * @throws ScriptException
+     * @throws ProcessingException
      */
-    private boolean isTrueCondition(String key) throws ScriptException {
-        String expr = "${" + key.substring(IF_PREFIX.length(), key.length()-1) + ":boolean}";
-        JsonNode result = engine.expand(expr);
-        return result.isBoolean() && result.asBoolean();
+    private boolean isTrueCondition(String key, ElseTracker tracker) throws ScriptException, ProcessingException {
+        Matcher matcher = IF_PATTERN.matcher(key);
+        matcher.matches(); // always true since isLoop was called, right?
+        boolean ifElse = matcher.group(1) != null;
+        String expr = matcher.group(2);
+        // first check for ${else} -- never anything to evaluate
+        // just return true whether the condition is satisfied or not
+        if (expr == null) {
+            // ${else}
+            return tracker.checkElse();
+        }
+
+        // now check ${if} and ${else if} to see if we should even evalute
+        // if not (condition already satisfied), just return false
+        boolean eval;
+        if (ifElse) {
+            // ${else if}
+            eval = tracker.checkElseIf();
+        } else {
+            // ${if}
+            eval = tracker.checkIf();
+        }
+        if (!eval) {
+            return false;
+        }
+
+        // so we at least have to evaluate
+        // return true (and mark the condition as satisfied) if the expression is true
+        boolean result = engine.isTrue(expr);
+        if (result) {
+            tracker.satisfy();
+        }
+        return result;
     }
 
     /**
@@ -221,9 +346,55 @@ public class TemplateExpander {
      * @param key the node to evaluate
      * @return {@code true} if it evaluates to true
      * @throws ScriptException
+     * @throws ProcessingException
      */
-    private boolean isTrueCondition(JsonNode node) throws ScriptException {
-        return isTrueCondition(node.fieldNames().next());
+    private boolean isTrueCondition(JsonNode node, ElseTracker tracker) throws ScriptException, ProcessingException {
+        return isTrueCondition(node.fieldNames().next(), tracker);
+    }
+
+    /**
+     * Looks for a singleton expression of the form ${var variable}.
+     * @param key the string to analyze
+     * @return true for "var" keys
+     */
+    private static boolean isVar(String key) {
+        return new SquiggleMatcher(key).singleton() != null &&
+            VAR_PATTERN.matcher(key).matches();
+    }
+
+    /**
+     * Looks for an object with a single field whose name is a
+     * singleton expression of the form ${var variable}.
+     * @param node the node to analyze
+     * @return true for "var" nodes
+     */
+    private static boolean isVar(JsonNode node) {
+        if (node.isObject() && node.size()==1) {
+            return isVar(node.fieldNames().next());
+        }
+        return false;
+    }
+
+    /**
+     * For a key for which {@code isVar} is true, extracts the variable
+     * name and returns it.
+     * @param key the {@code isVar} String to evaluate
+     * @return the extracted variable name
+     */
+    private String varName(String key) {
+        Matcher matcher = VAR_PATTERN.matcher(key);
+        matcher.matches(); // always true since isLoop was called, right?
+        return matcher.group(1);
+    }
+
+    /**
+     * For a node for which {@code isVar} is true, extracts the variable
+     * name and returns it.
+     * @param node the {@code isVar} node to evaluate
+     * @return the extracted variable name
+     */
+    private String varName(JsonNode node) {
+        return varName(node.fieldNames().next());
     }
 
     private void arrayNodeMerge(ArrayNode result, JsonNode toAdd) {
@@ -237,6 +408,7 @@ public class TemplateExpander {
     private JsonNode expand(JsonNode node) throws Exception {
         if (node.isArray()) {
             ArrayNode result = Json.mapper.createArrayNode();
+            ElseTracker tracker = new ElseTracker();
             for (int i=0; i<node.size(); i++) {
                 JsonNode entry = node.get(i);
                 if (isLoop(entry)) {
@@ -248,8 +420,17 @@ public class TemplateExpander {
                         arrayNodeMerge(result, expand(body));
                     }
                 } else if (isConditional(entry)) {
-                    if (isTrueCondition(entry)) {
-                        arrayNodeMerge(result, expand(entry.elements().next()));
+                    if (isTrueCondition(entry, tracker)) {
+                        JsonNode expanded = expand(entry.elements().next());
+                        if (expanded != null) {
+                            arrayNodeMerge(result, expanded);
+                        }
+                    }
+                } else if (isVar(entry)) {
+                    String var = varName(entry);
+                    JsonNode expanded = expand(entry);
+                    if (expanded != null) {
+                        engine.datum(var, Json.asText(expanded));
                     }
                 } else {
                     JsonNode expanded = expand(entry);
@@ -261,14 +442,17 @@ public class TemplateExpander {
             return result.size() > 0 ? result : null;
         } else if (node.isObject()) {
             ObjectNode result = Json.mapper.createObjectNode();
+            ElseTracker tracker = new ElseTracker();
             Iterator<Entry<String,JsonNode>> fields = node.fields();
             while (fields.hasNext()) {
                 Entry<String,JsonNode> field = fields.next();
                 JsonNode entry = field.getValue();
                 if (isConditional(field.getKey())) {
-                    if (isTrueCondition(field.getKey())) {
+                    if (isTrueCondition(field.getKey(), tracker)) {
                         JsonNode expanded = expand(entry);
-                        if (expanded.isObject()) {
+                        if (expanded == null) {
+                            // ignore
+                        } else if (expanded.isObject()) {
                             result.setAll((ObjectNode)expanded);
                         } else {
                             throw new ProcessingException("invalid template condition--\"${if:}\" must be a nested object in an object: "+
@@ -289,6 +473,12 @@ public class TemplateExpander {
                                 field.getKey());
                         }
                     }
+                } else if (isVar(field.getKey())) {
+                    String var = varName(field.getKey());
+                    JsonNode expanded = expand(entry);
+                    if (expanded != null) {
+                        engine.datum(var, Json.asText(expanded));
+                    }
                 } else {
                     String key = engine.expand(field.getKey()).asText();
                     JsonNode expanded = expand(entry);
@@ -303,6 +493,8 @@ public class TemplateExpander {
             return x;
         }
     }
+
+    /*-- the expander public external interface ------------------------------*/
 
     public static class ExpanderResult {
         private JsonNode expanded;
