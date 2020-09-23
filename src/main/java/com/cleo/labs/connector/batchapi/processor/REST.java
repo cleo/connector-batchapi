@@ -322,18 +322,21 @@ public class REST {
     }
 
     public ObjectNode getUser(String username) throws Exception {
-        List<ObjectNode> users = getUsers("username eq \"" + username + "\"");
+        return getUser(null, username);
+    }
+
+    public ObjectNode getUser(String authfilter, String username) throws Exception {
+        List<ObjectNode> users = getUsers(authfilter, "username eq \"" + username + "\"");
         if (users.size() > 0) {
             return users.get(0);
         }
         return null;
     }
 
-    public List<ObjectNode> getUsers(String filter) throws Exception {
+    public List<ObjectNode> getUsers(String authfilter, String filter) throws Exception {
         List<ObjectNode> list = new ArrayList<>();
-        JsonCollection authenticators = new JsonCollection("/api/authenticators");
-        while (authenticators.hasNext()) {
-            ObjectNode authenticator = authenticators.next();
+        List<ObjectNode> authenticators = getAuthenticators(authfilter);
+        for (ObjectNode authenticator : authenticators) {
             JsonCollection users = new JsonCollection(Json.getSubElementAsText(authenticator, "_links.users.href"),
                     filter);
             users.forEachRemaining(list::add);

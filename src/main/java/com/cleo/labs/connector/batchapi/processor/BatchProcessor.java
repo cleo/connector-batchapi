@@ -78,12 +78,18 @@ public class BatchProcessor {
         return this;
     }
 
+    public BatchProcessor setTraceRequests(boolean traceRequests) {
+        this.traceRequests = traceRequests;
+        return this;
+    }
+
     private REST api;
     private EnumSet<Option> options;
     private String exportPassword;
     private Operation defaultOperation;
     private String template;
     private VersaLex versalex;
+    private boolean traceRequests;
 
     private void loadVersaLex() {
         try {
@@ -98,7 +104,8 @@ public class BatchProcessor {
     public enum ResourceClass {
         user ("username"),
         authenticator ("authenticator"),
-        connection ("connection");
+        connection ("connection"),
+        any ("name");
 
         private String tag;
         private ResourceClass(String tag) {
@@ -348,9 +355,13 @@ public class BatchProcessor {
     }
 
     private List<ObjectNode> listUsers(Request request) throws Exception {
-        List<ObjectNode> list = api.getUsers(request.resourceFilter);
+        String filter = request.resourceFilter.replace(NAMETOKEN, "username");
+        String authenticator = Json.getSubElementAsText(request.entry, "authenticator");
+        String authfilter = Strings.isNullOrEmpty(authenticator) ? null : "alias eq \""+authenticator+"\"";
+        List<ObjectNode> list = api.getUsers(authfilter, filter);
         if (list.isEmpty()) {
-            throw new ProcessingException("filter \""+request.resourceFilter+"\" returned no users");
+            throw new NotFoundException("filter \""+filter+"\" returned no users"+
+                (Strings.isNullOrEmpty(authenticator) ? "" : " in "+authenticator));
         }
         for (int i = 0; i<list.size(); i++) {
             list.set(i, listUser(list.get(i)));
@@ -359,9 +370,12 @@ public class BatchProcessor {
     }
 
     private ObjectNode listUser(Request request) throws Exception {
-        ObjectNode user = api.getUser(request.resource);
+        String authenticator = Json.getSubElementAsText(request.entry, "authenticator");
+        String authfilter = Strings.isNullOrEmpty(authenticator) ? null : "alias eq \""+authenticator+"\"";
+        ObjectNode user = api.getUser(authfilter, request.resource);
         if (user == null) {
-            throw new ProcessingException("user "+request.resource+" not found");
+            throw new NotFoundException("user "+request.resource+" not found"+
+                (Strings.isNullOrEmpty(authenticator) ? "" : " in "+authenticator));
         }
         return listUser(user);
     }
@@ -392,10 +406,13 @@ public class BatchProcessor {
         return user;
     }
 
+    private static final String USERSTOKEN = "$$users$$"; // place to stash ArrayNode of users in an authenticator result
+
     private List<ObjectNode> listAuthenticators(Request request, boolean includeUsers) throws Exception {
-        List<ObjectNode> list = api.getAuthenticators(request.resource);
+        String filter = request.resourceFilter.replace(NAMETOKEN, "alias");
+        List<ObjectNode> list = api.getAuthenticators(filter);
         if (list.isEmpty()) {
-            throw new ProcessingException("filter \""+request.resourceFilter+"\" returned no authenticators");
+            throw new NotFoundException("filter \""+filter+"\" returned no authenticators");
         }
         for (ObjectNode authenticator : list) {
             authenticator.set("authenticator", authenticator.remove("alias"));
@@ -410,7 +427,7 @@ public class BatchProcessor {
                     user = listUser(user);
                     userlist.add(user);
                 }
-                authenticator.putArray("users").addAll(userlist);
+                authenticator.putArray(USERSTOKEN).addAll(userlist);
             }
         }
         return list;
@@ -419,7 +436,7 @@ public class BatchProcessor {
     private ObjectNode listAuthenticator(Request request, boolean includeUsers) throws Exception {
         ObjectNode authenticator = api.getAuthenticator(request.resource);
         if (authenticator == null) {
-            throw new ProcessingException("authenticator "+request.resource+" not found");
+            throw new NotFoundException("authenticator "+request.resource+" not found");
         }
         authenticator.set("authenticator", authenticator.remove("alias"));
         injectActions(authenticator);
@@ -433,15 +450,16 @@ public class BatchProcessor {
 			    user = listUser(user);
 			    userlist.add(user);
 			}
-			authenticator.putArray("users").addAll(userlist);
+			authenticator.putArray(USERSTOKEN).addAll(userlist);
         }
         return authenticator;
     }
 
     private List<ObjectNode> listConnections(Request request) throws Exception {
-        List<ObjectNode> list = api.getConnections(request.resourceFilter);
+        String filter = request.resourceFilter.replace(NAMETOKEN, "alias");
+        List<ObjectNode> list = api.getConnections(filter);
         if (list.isEmpty()) {
-            throw new ProcessingException("filter \""+request.resourceFilter+"\" returned no connections");
+            throw new NotFoundException("filter \""+filter+"\" returned no connections");
         }
         for (int i = 0; i<list.size(); i++) {
             list.set(i, listConnection(list.get(i)));
@@ -452,7 +470,7 @@ public class BatchProcessor {
     private ObjectNode listConnection(Request request) throws Exception {
         ObjectNode connection = api.getConnection(request.resource);
         if (connection == null) {
-            throw new ProcessingException("connection "+request.resource+" not found");
+            throw new NotFoundException("connection "+request.resource+" not found");
         }
         return listConnection(connection);
     }
@@ -592,8 +610,10 @@ public class BatchProcessor {
     private ArrayNode cleanup(ArrayNode list) {
         Iterator<JsonNode> elements = list.elements();
         while (elements.hasNext()) {
-            ObjectNode element = (ObjectNode)elements.next();
-            cleanup(element);
+            JsonNode element = elements.next();
+            if (element.isObject()) {
+                cleanup((ObjectNode)element);
+            }
         }
         return list;
     }
@@ -777,7 +797,7 @@ public class BatchProcessor {
             list = listAuthenticators(request, includeUsers);
             int i = 1;
             for (ObjectNode authenticator : list) {
-                ArrayNode users = (ArrayNode)authenticator.remove("users");
+                ArrayNode users = (ArrayNode)authenticator.remove(USERSTOKEN);
                 String message = includeUsers
                         ? String.format("%s authenticator %s (%d of %d)",
                             request.operation.tag(),
@@ -788,7 +808,7 @@ public class BatchProcessor {
                             Json.getSubElementAsText(authenticator, ResourceClass.authenticator.tag()),
                             i, list.size(), users.size());
                 ObjectNode authenticatorResult = insertResult(authenticator, true, message);
-                ArrayNode userResults = authenticatorResult.putArray("users");
+                ArrayNode userResults = authenticatorResult.putArray(USERSTOKEN);
                 for (int j=0; j<users.size(); j++) {
                     message = String.format("%s authenticator %s (%d of %d): user %d of %d",
                             request.operation.tag(),
@@ -801,14 +821,14 @@ public class BatchProcessor {
             }
         } else {
             ObjectNode authenticator = listAuthenticator(request, includeUsers);
-            ArrayNode users = (ArrayNode)authenticator.remove("users");
+            ArrayNode users = (ArrayNode)authenticator.remove(USERSTOKEN);
             String message = includeUsers
                     ? String.format("%s authenticator %s",
                         request.operation.tag(), request.resource)
                     : String.format("%s authenticator %s with %d users",
                         request.operation.tag(), request.resource, users.size());
             ObjectNode authenticatorResult = insertResult(authenticator, true, message);
-            ArrayNode userResults = authenticatorResult.putArray("users");
+            ArrayNode userResults = authenticatorResult.putArray(USERSTOKEN);
             for (int i=0; i<users.size(); i++) {
                 message = String.format("%s authenticator %s: user %d of %d",
                         request.operation.tag(),
@@ -852,6 +872,24 @@ public class BatchProcessor {
                     request.operation.equals(Operation.list) || request.operation.equals(Operation.delete));
         case connection:
             return processListConnection(request, results);
+        case any:
+        {
+            List<ObjectNode> list = new ArrayList<>();
+            try {
+                list.addAll(processListUser(request, results));
+            } catch (NotFoundException ignore) {}
+            try {
+                list.addAll(processListAuthenticator(request, results,
+                            request.operation.equals(Operation.list) || request.operation.equals(Operation.delete)));
+            } catch (NotFoundException ignore) {}
+            try {
+                list.addAll(processListConnection(request, results));
+            } catch (NotFoundException ignore) {}
+            if (list.isEmpty()) {
+                throw new NotFoundException("filter \""+request.resourceFilter.replace("NAMETOKEN", "name")+"\" returned no users");
+            }
+            return list;
+        }
         default:
             throw new ProcessingException("unrecognized request");
         }
@@ -859,7 +897,7 @@ public class BatchProcessor {
 
     private void appendAndFlattenUsers(JsonNode tempResult, ArrayNode results) {
         results.add(tempResult);
-        ArrayNode users = (ArrayNode)((ObjectNode)tempResult).remove("users");
+        ArrayNode users = (ArrayNode)((ObjectNode)tempResult).remove(USERSTOKEN);
         if (users != null && !users.isEmpty()) {
             users.forEach(results::add);
         }
@@ -883,7 +921,7 @@ public class BatchProcessor {
         public Operation operation = null;          // the operation
     }
 
-    private static final Set<Operation> FILTERABLE = EnumSet.of(Operation.list, Operation.delete, Operation.update);
+    private static final String NAMETOKEN = "$$name$$";
 
     public Request analyzeRequest(ObjectNode original) throws Exception {
         Request request = new Request();
@@ -895,8 +933,7 @@ public class BatchProcessor {
         request.operation = request.entry.has("operation")
                 ? Operation.valueOf(Json.asText(request.entry.remove("operation")))
                 : defaultOperation;
-        boolean filterable = FILTERABLE.contains(request.operation);
-        boolean adding = request.operation == Operation.add;
+        boolean existing = request.operation != Operation.add;
 
         // collect actions into an ObjectNode
         request.actions = normalizeActions(request.entry.remove("actions"));
@@ -906,7 +943,7 @@ public class BatchProcessor {
 
         // see if there is a filter (and remove it from the entry)
         request.resourceFilter = Json.asText(request.entry.remove("filter"));
-        if (request.resourceFilter != null && !filterable) {
+        if (request.resourceFilter != null && !existing) {
             throw new ProcessingException("\"filter\" valid only for list, update and delete");
         }
 
@@ -919,15 +956,13 @@ public class BatchProcessor {
                 break;
             }
         }
-        if (request.resource == null) {
-            // if there is no name, then a blank filter is implied or it's an error
-            if (filterable) {
-                if (request.resourceFilter == null) {
-                    request.resourceFilter = "";
-                }
-            } else {
-                throw new ProcessingException("\"username\", \"authenticator\", or \"connection\" name missing");
-            }
+        if (existing && request.resource == null && request.resourceFilter == null) {
+            // if there is no name, then a blank filter is implied
+            request.resourceFilter = "";
+        }
+        if (!existing && (request.resource == null || request.resourceClass==ResourceClass.any)) {
+            // if it's an add and there is no name (or it's the generic "name"), that's an error
+            throw new ProcessingException("\"username\", \"authenticator\" or \"connection\" required");
         }
 
         // resourceType: if there is no name, try resolving based on type
@@ -936,46 +971,54 @@ public class BatchProcessor {
                 request.resourceClass == null ? null : request.resourceClass.name());
 
         if (request.resourceType == null) {
-            throw new ProcessingException("\"username\", \"authenticator\", \"connection\" or \"type\" required");
-        } else if (request.resourceType.equals("user")) {
-            if (request.resourceClass == null) {
+            // this means there was no name and no type, so it's an "any" by default
+            request.resourceClass = ResourceClass.any;
+            request.resourceType = ResourceClass.any.name();
+        } else if (request.resourceType.equals(ResourceClass.user.name())) {
+            // the only user type is "user", so this forces class to user as well
+            if (request.resourceClass == null || request.resourceClass == ResourceClass.any) {
                 request.resourceClass = ResourceClass.user;
             } else if (request.resourceClass != ResourceClass.user) {
                 throw new ProcessingException("\"type\":\""+request.resourceType+"\" incompatible with \""+request.resourceClass.tag()+"\"");
             }
         } else if (AUTH_TYPES.contains(request.resourceType)) {
-            if (request.resourceClass == null) {
+            // any of the auth types force class to authenticator
+            if (request.resourceClass == null || request.resourceClass == ResourceClass.any) {
                 request.resourceClass = ResourceClass.authenticator;
             } else if (request.resourceClass != ResourceClass.authenticator) {
                 throw new ProcessingException("\"type\":\""+request.resourceType+"\" incompatible with \""+request.resourceClass.tag()+"\"");
             }
-            if (adding && request.resourceType.equals("authenticator")) {
+            if (!existing && request.resourceType.equals("authenticator")) {
                 throw new ProcessingException("generic type \"authenticator\" not valid for add: use specific type");
             }
-        } else {
-            if (request.resourceClass == null) {
+        } else if (!request.resourceType.equals(ResourceClass.any.name())) {
+            // any other type we'll assume to be a connection (except "any")
+            if (request.resourceClass == null || request.resourceClass == ResourceClass.any) {
                 request.resourceClass = ResourceClass.connection;
             } else if (request.resourceClass != ResourceClass.connection) {
                 throw new ProcessingException("\"type\":\""+request.resourceType+"\" incompatible with \""+request.resourceClass.tag()+"\"");
             }
-            if (adding && request.resourceType.equals("connection")) {
+            if (!existing && request.resourceType.equals("connection")) {
                 throw new ProcessingException("generic type \"connection\" not valid for add: use specific type");
             }
         }
 
-        // if there specific resource type for a list/delete, update filter
-        if ((request.operation == Operation.list || request.operation == Operation.delete)
-                && !request.resourceType.equals(request.resourceClass.name())) {
+        // if there specific resource type or name for an existing resource, update filter
+        if (existing &&
+                (!request.resourceType.equals(request.resourceClass.name()) ||
+                 request.resourceFilter != null && request.resource != null)) {
             if (!Strings.isNullOrEmpty(request.resourceFilter)) {
-                request.resourceFilter = "("+request.resourceFilter+") and ";
+                request.resourceFilter = "("+request.resourceFilter+")";
             } else {
                 request.resourceFilter = "";
             }
-            request.resourceFilter += "type eq \""+request.resourceType+"\"";
+            if (!request.resourceType.equals(request.resourceClass.name())) {
+                request.resourceFilter += " and type eq \""+request.resourceType+"\"";
+            }
             // if there is a specific resource name requested, add it to the filter as well
             if (request.resource != null) {
                 // this won't include users, so "alias" is always correct
-                request.resourceFilter += " and alias eq \""+request.resource+"\"";
+                request.resourceFilter += " and "+NAMETOKEN+" eq \""+request.resource+"\"";
                 request.resource = null;
             }
         }
@@ -1140,6 +1183,10 @@ public class BatchProcessor {
             ObjectNode original = (ObjectNode)element;
             try {
                 Request request = analyzeRequest(original);
+                if (traceRequests) {
+                    System.err.println("REQUEST:");
+                    System.err.println(Json.mapper.valueToTree(request).toPrettyString());
+                }
                 switch (request.operation) {
                 case preview:
                     results.add(insertResult(original, true, "request preview"));

@@ -304,6 +304,7 @@ public class Main {
             if (cmd.hasOption("template")) {
                 processor.setTemplate(Paths.get(cmd.getOptionValue("template")));
             }
+            processor.setTraceRequests(cmd.hasOption("trace-requests"));
             processor.processFiles(cmd.getOptionValues("input"));
         }
     }
