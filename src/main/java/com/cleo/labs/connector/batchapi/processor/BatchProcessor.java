@@ -1113,9 +1113,14 @@ public class BatchProcessor {
             file = Json.mapper.createArrayNode();
             for (TemplateExpander.ExpanderResult result : expander.expand()) {
                 if (!result.success()) {
-                    throw result.exception();
-                }
-                if (result.expanded().isArray()) {
+                    ObjectNode errorNode = Json.mapper.createObjectNode();
+                    ObjectNode resultNode = errorNode.putObject("result");
+                    ObjectNode csvNode = resultNode.putObject("csv");
+                    csvNode.put("error", result.exception().getMessage());
+                    csvNode.put("line", result.lineNumber());
+                    csvNode.set("data", Json.mapper.valueToTree(result.line()));
+                    file.add(errorNode);
+                } else if (result.expanded().isArray()) {
                     file.addAll((ArrayNode)result.expanded());
                 } else {
                     file.add(result.expanded());
@@ -1186,6 +1191,10 @@ public class BatchProcessor {
                 if (traceRequests) {
                     System.err.println("REQUEST:");
                     System.err.println(Json.mapper.valueToTree(request).toPrettyString());
+                }
+                if (request.entry.isEmpty()) {
+                    results.add(Json.setSubElement(original, "result.message", "empty request"));
+                    continue;
                 }
                 switch (request.operation) {
                 case preview:

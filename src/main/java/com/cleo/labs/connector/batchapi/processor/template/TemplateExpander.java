@@ -161,6 +161,7 @@ public class TemplateExpander {
     private static final Pattern LOOP_PATTERN = Pattern.compile("\\$\\{for\\s+(column\\s+)?([a-zA-Z_]\\w*)\\s*:(.*)\\}");
     private static final Pattern IF_PATTERN = Pattern.compile("\\$\\{(?:(else\\s+)?if(?:\\s[^:]*)?:(.*)|else(?:\\s.*)?)\\}");
     private static final Pattern VAR_PATTERN = Pattern.compile("\\$\\{var\\s+([a-zA-Z_]\\w*)\\s*}");
+    private static final Pattern ERROR_PATTERN = Pattern.compile("\\$\\{error(?:\\s.*)?}");
 
     /**
      * Looks for a singleton expression of one of the following looping forms:
@@ -397,8 +398,33 @@ public class TemplateExpander {
         return varName(node.fieldNames().next());
     }
 
+    /**
+     * Looks for a singleton expression of the form ${error}.
+     * @param key the string to analyze
+     * @return true for "error" keys
+     */
+    private static boolean isError(String key) {
+        return new SquiggleMatcher(key).singleton() != null &&
+            ERROR_PATTERN.matcher(key).matches();
+    }
+
+    /**
+     * Looks for an object with a single field whose name is a
+     * singleton expression of the form ${error}.
+     * @param node the node to analyze
+     * @return true for "error" nodes
+     */
+    private static boolean isError(JsonNode node) {
+        if (node.isObject() && node.size()==1) {
+            return isError(node.fieldNames().next());
+        }
+        return false;
+    }
+
     private void arrayNodeMerge(ArrayNode result, JsonNode toAdd) {
-        if (toAdd.isArray()) {
+        if (toAdd == null) {
+            // do nothing
+        } else if (toAdd.isArray()) {
             result.addAll((ArrayNode)toAdd);
         } else {
             result.add(toAdd);
@@ -421,17 +447,13 @@ public class TemplateExpander {
                     }
                 } else if (isConditional(entry)) {
                     if (isTrueCondition(entry, tracker)) {
-                        JsonNode expanded = expand(entry.elements().next());
-                        if (expanded != null) {
-                            arrayNodeMerge(result, expanded);
-                        }
+                        arrayNodeMerge(result, expand(entry.elements().next()));
                     }
                 } else if (isVar(entry)) {
                     String var = varName(entry);
-                    JsonNode expanded = expand(entry);
-                    if (expanded != null) {
-                        engine.datum(var, Json.asText(expanded));
-                    }
+                    engine.datum(var, Json.asText(expand(entry)));
+                } else if (isError(entry)) {
+                    throw new ProcessingException(Json.asText(expand(entry)));
                 } else {
                     JsonNode expanded = expand(entry);
                     if (expanded != null) {
@@ -475,10 +497,9 @@ public class TemplateExpander {
                     }
                 } else if (isVar(field.getKey())) {
                     String var = varName(field.getKey());
-                    JsonNode expanded = expand(entry);
-                    if (expanded != null) {
-                        engine.datum(var, Json.asText(expanded));
-                    }
+                    engine.datum(var, Json.asText(expand(entry)));
+                } else if (isError(field.getKey())) {
+                    throw new ProcessingException(Json.asText(expand(entry)));
                 } else {
                     String key = engine.expand(field.getKey()).asText();
                     JsonNode expanded = expand(entry);
@@ -497,8 +518,17 @@ public class TemplateExpander {
     /*-- the expander public external interface ------------------------------*/
 
     public static class ExpanderResult {
+        private int lineNumber;
         private JsonNode expanded;
         private Exception exception;
+        private Map<String,String> line;
+        public ExpanderResult lineNumber(int lineNumber) {
+            this.lineNumber = lineNumber;
+            return this;
+        }
+        public int lineNumber() {
+            return this.lineNumber;
+        }
         public ExpanderResult expanded(JsonNode expanded) {
             this.expanded = expanded;
             return this;
@@ -515,6 +545,13 @@ public class TemplateExpander {
         }
         public boolean success() {
             return this.exception == null;
+        }
+        public ExpanderResult line(Map<String,String> line) {
+            this.line = line;
+            return this;
+        }
+        public Map<String,String> line() {
+            return this.line;
         }
         public ExpanderResult() {
             this.expanded = null;
@@ -538,9 +575,11 @@ public class TemplateExpander {
 
     public class Expander implements Iterator<ExpanderResult>, Iterable<ExpanderResult> {
         private Iterator<Map<String,String>> dataIterator;
+        private int lineNumber;
 
         public Expander() {
             dataIterator = data.iterator();
+            lineNumber = 1; // start at 1 to count the header line
         }
 
         @Override
@@ -551,7 +590,9 @@ public class TemplateExpander {
         @Override
         public ExpanderResult next() {
             Map<String,String> line = dataIterator.next();
-            ExpanderResult result = new ExpanderResult();
+            ExpanderResult result = new ExpanderResult()
+                    .lineNumber(++lineNumber)
+                    .line(line);
             try {
                 engine.data(line);
                 result.expanded(expand(template));
