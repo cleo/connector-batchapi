@@ -1,5 +1,6 @@
 package com.cleo.labs.connector.batchapi.processor;
 
+import java.net.URI;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -147,13 +148,20 @@ public class REST {
     }
 
     private ObjectNode post(JsonNode json, String href) throws Exception {
-        HttpPost post = new HttpPost(this.baseUrl + href);
-        post.setEntity(new StringEntity(json.toString()));
-        post.addHeader("content-type", "application/json");
-        if (traceRequests) {
-            System.err.println("POST "+href+":\n"+Json.mapper.valueToTree(json).toPrettyString());
+        return post(json.toString(), new URI(this.baseUrl+href), 201);
+    }
+
+    private ObjectNode post(String entity, URI uri, int success) throws Exception {
+        HttpPost post = new HttpPost(uri);
+        if (!Strings.isNullOrEmpty(entity)) {
+            post.setEntity(new StringEntity(entity));
+            post.addHeader("content-type", "application/json");
         }
-        return execute(post, 201);
+        if (traceRequests) {
+            String href = uri.toString().replaceFirst("^.*?[^/](?=/[^/])", "");
+            System.err.println("POST "+href+":\n"+Strings.nullToEmpty(entity));
+        }
+        return execute(post, success);
     }
 
     public ObjectNode put(JsonNode json, JsonNode object) throws Exception {
@@ -161,11 +169,18 @@ public class REST {
     }
 
     private ObjectNode put(JsonNode json, String href) throws Exception {
-        HttpPut put = new HttpPut(this.baseUrl + href);
-        put.setEntity(new StringEntity(json.toString()));
-        put.addHeader("content-type", "application/json");
+        return put(json.toString(), new URI(this.baseUrl+href));
+    }
+
+    private ObjectNode put(String entity, URI uri) throws Exception {
+        HttpPut put = new HttpPut(uri);
+        if (!Strings.isNullOrEmpty(entity)) {
+            put.setEntity(new StringEntity(entity));
+            put.addHeader("content-type", "application/json");
+        }
         if (traceRequests) {
-            System.err.println("PUT "+href+":\n"+Json.mapper.valueToTree(json).toPrettyString());
+            String href = uri.toString().replaceFirst("^.*?[^/](?=/[^/])", "");
+            System.err.println("PUT "+href+":\n"+Strings.nullToEmpty(entity));
         }
         return execute(put, 200);
     }
@@ -213,7 +228,7 @@ public class REST {
                 if (!Strings.isNullOrEmpty(filter)) {
                     uri.addParameter("filter", filter);
                 }
-                uri.addParameter("count", "2");
+                uri.addParameter("count", "100");
                 HttpGet httpGet = new HttpGet(uri.build());
                 if (authToken != null) {
                     httpGet.addHeader("Authorization", "Bearer " + authToken);
@@ -361,6 +376,28 @@ public class REST {
             resourcePath += "?includeDefaults=true";
         }
         return getResources(resourcePath, filter);
+    }
+
+    public List<ObjectNode> getActions(String filter) throws Exception {
+        return getResources("actions", filter);
+    }
+
+    public ObjectNode runAction(ObjectNode action) throws Exception {
+        return runAction(action, null);
+    }
+
+    public ObjectNode runAction(ObjectNode action, ObjectNode options) throws Exception {
+        String path = Json.getSubElementAsText(action, "_links.run.href");
+        String timeout = Json.getSubElementAsText(options, "timeout");
+        String messagesCount = Json.getSubElementAsText(options, "messagesCount");
+        URIBuilder uri = new URIBuilder(baseUrl + path);
+        if (!Strings.isNullOrEmpty(timeout)) {
+            uri.addParameter("timeout", timeout);
+        }
+        if (!Strings.isNullOrEmpty(messagesCount)) {
+            uri.addParameter("messagesCount", messagesCount);
+        }
+        return post(null, uri.build(), 200);
     }
 
     public void deleteActions(ObjectNode connection) throws Exception {
