@@ -26,11 +26,11 @@ outgoing:
   access: ${Access.toLowerCase()}
 accept:
   ftp:
-    enabled: ${FTPean}
+    enabled: ${FTP.match(/^(yes|true)$/i):boolean}
   sftp:
-    enabled: ${SSHFTPean}
+    enabled: ${SSHFTP.match(/^(yes|true)$/i):boolean}
   http:
-    enabled: ${HTTPean}
+    enabled: ${HTTP.match(/^(yes|true)$/i):boolean}
   security:
     requireIPFilter: false
     passwordRules:
