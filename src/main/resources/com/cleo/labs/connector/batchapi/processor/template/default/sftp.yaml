@@ -17,13 +17,13 @@
       inbox: ${inbox}
       receivedbox: ${receivedbox}
   actions:
-    ${if:CreateSendName}:
+    ${if:CreateSendName && !CreateSendName.match(/^na$/i)}:
       ${CreateSendName}:
         alias: ${CreateSendName}
         commands:
         - ${for command:ActionSend.split(/;\|/)}: ${command}
         schedule: ${Schedule_Send=='polling'?'on file continuously':Schedule_Send}
-    ${if:CreateReceiveName}:
+    ${if:CreateReceiveName && !CreateReceiveName.match(/^na$/i)}:
       ${CreateReceiveName}:
         alias: ${CreateReceiveName}
         commands:

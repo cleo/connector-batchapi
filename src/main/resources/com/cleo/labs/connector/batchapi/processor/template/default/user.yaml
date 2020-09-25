@@ -20,13 +20,13 @@
     - ${for ip:WhitelistIP.split(';')}:
         ipAddress: ${ip}
   actions:
-    ${if:CreateCollectName}:
+    ${if:CreateCollectName && !CreateCollectName.match(/^na$/i)}:
       ${CreateCollectName}:
         alias: ${CreateCollectName}
         commands:
         - ${for command:ActionCollect.split(/;\|/)}: ${command}
         schedule: ${Schedule_Collect=='polling'?'on file continuously':Schedule_Send}
-    ${if:CreateReceiveName}:
+    ${if:CreateReceiveName && !CreateReceiveName.match(/^na$/i)}:
       ${CreateReceiveName}:
         alias: ${CreateReceiveName}
         commands:
