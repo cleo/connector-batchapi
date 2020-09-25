@@ -20,7 +20,7 @@ The command line utility maintains a set of connection profiles in the
 Request files maybe either in YAML/JSON format or in CSV format. The YAML/JSON
 format consists of a collection of requests based on the native Harmony
 [REST API](https://developer.cleo.com/api/getting-started/overview.html) with
-extensions to indicate the operation (`add`, `update`, `list`, `delete`).
+extensions to indicate the operation (`add`, `update`, `list`, `delete`, `run`).
 
 There are five separate CSV templates, one for each of the following object types:
 
@@ -32,8 +32,8 @@ There are five separate CSV templates, one for each of the following object type
 
 The CSV templates use specific column headings to map to object properties using
 a simpified, flattened approach compared with the full JSON object schema.
-The CSV formats can be easier to work with for bulk imports, but for full access
-to all object properties the YAML/JSON format is required.
+The CSV formats can be easier to work with for bulk imports (`add`s), but for full access
+to all object properties or support for `list`, `delete`, `update` or to `run` actions, the YAML/JSON format is required.
 
 ## [&LessLess;](#overview-) Getting Started [&GreaterGreater;](#-password-generation-) ##
 
@@ -117,7 +117,7 @@ java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar -i - <<< '{"operation"
 or even more compactly
 
 ```
-java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar --operation list -i - <<< 'username:bob'
+java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar --operation list -i - <<< 'username: bob'
 ```
 
 You may use `-i` multiple times to supply a sequence of input files to be processed. Keep in mind that while a single input file can only be in one of the six supported formats (YAML/JSON or CSV for one of the five CSV object types), you can mix and match input file formats when using multiple  `-i`.
@@ -240,13 +240,14 @@ Each request has an _operation_ and an _object type_ to operate on.
 Operations are typically performed on single objects referenced by the object name.
 The underlying API uses `alias` to represent the object name, except for users who are identified by `username`&mdash;
 the batch utility uses a type-specific _Identifier_ to name objects of different types.
-Operations supporting sets of objects (list and delete) may specify a filter string in place of a specific object name&mdash;the filter expressions are passed directly to the underlying API, so make sure to use the appropriate `alias` or `username` attribute in filters.
+Operations supporting sets of objects (list, update, delete and run) may specify a filter string in place of a specific object name&mdash;the filter expressions are passed directly to the underlying API, so make sure to use the appropriate `alias` or `username` attribute in filters (or use `$$name$$` and the utility will substitute the correct token based on the object type).
 
 Object Type | Description | Identifier | Meta Type
 ------------|-------------|------------|-----
 Authenticator | A container for users that defines many properties, including folder structure and security properties (see the [API reference](https://developer.cleo.com/api/api-reference/post-authenticators-native-user.html)) | `authenticator` | `authenticator`
 User        | A user who logs in to Harmony using FTP, SFTP, or through the https Portal | `username` | `user`
 Connection  | A connection to a server over FTP, SFTP, or AS2 | `connection` | `connection`
+Action      | An action that runs under one of the other objects | `action` | `action`
 
 Each object type is managed with its own endpoint in the underlying Harmony API, so the batch utility must be able to determine which endpoint to use for a given request. To do this it uses a combination of the object name and object type, depending on the request operation.
 
@@ -262,8 +263,10 @@ Connection    | `connection`    | `as2`           | A connection to an AS2 partn
 &nbsp;        | &nbsp;          | `ftp`           | A connection to an FTP server
 &nbsp;        | &nbsp;          | _many others_   | See [here](https://developer.cleo.com/api/api-reference/resource-connections.html) for a list of many other supported connection types
 User          | `user`          | `user`          | Users don't have a type, only a meta type
+Action        | `action`        | `Commands`      | Actions comprised of "commands"
+&nbsp;        | &nbsp;          | `JavaScript`    | Actions comprised of JavaScript "statements"
 
-The batch utility uses a meta-type-specific tag for the object name, e.g. `username: name` for users, `connection: name` for connections, and `authenticator: name` for authenticators. For operations involving existing objects (i.e. anything other than `add`), the specific type does not need to be provided. For `add` operations, both the name of the new object and its specific type are required. 'add' and 'update' operations must also supply an _Entity Body_, the details of the object to be created or updated. For `list` and `delete` operations the entity body is ignored.
+The batch utility uses a meta-type-specific tag for the object name, e.g. `username: name` for users, `connection: name` for connections, `authenticator: name` for authenticators and `action: action` for actions (action names are not unique, but are scoped to the parent object&mdash;see [below](#running-actions) for more details). For operations involving existing objects (i.e. anything other than `add`), the specific type does not need to be provided. For `add` operations, both the name of the new object and its specific type are required. `add` and `update` operations must also supply an _Entity Body_, the details of the object to be created or updated. For `list`, `delete` and `run` operations the entity body is ignored.
 
 Operation | Description               | Filter Supported | Entity Body
 ----------|---------------------------|:----------------:|:-----------:
@@ -271,20 +274,13 @@ list      | List existing object(s)   | &check;          | &nbsp;
 add       | Create a new object       | &nbsp;           | &check;
 update    | Update an existing object | &check;          | &check;
 delete    | Delete existing object(s) | &check;          | &nbsp;
+run       | Run existing action(s)    | &check;          | &nbsp;
 
 The default operation is `add`, unless this is overridden with the `--operation <OPERATION>` argument for the command line utility. In any case, if an operation is specified in a request it is honored over the default.
 
-The `list` and `delete` operations may be applied to sets of objects identified by a [filter](https://developer.cleo.com/api/getting-started/overview.html#filter). If a `filter` is provided in a request, the `type` is also required and the meta-type-specific name tag is prohibited.
+The `list`, `update`, `delete` and `run` operations may be applied to sets of objects identified by a [filter](https://developer.cleo.com/api/getting-started/overview.html#filter).
 
-For example, to list a specific SFTP connection, use (note that `type`, while permitted, is not required, but if supplied, it must match the type of the named object):
-
-```
----
-- operation: list
-  connection: "mysftp"
-```
-
-and to query for all SFTP connections, use (note that `connection` is prohibited and `type` is required):
+For example, to query for all SFTP connections, use:
 
 ```
 ---
@@ -293,7 +289,7 @@ and to query for all SFTP connections, use (note that `connection` is prohibited
   filter: type eq "sftp"
 ```
 
-Again, remember to use `alias` in filter expressions if needed for a `connection` or `authenticator` filter. The following two requests are equivalent:
+Again, remember to use `alias` in filter expressions if needed for a `connection` or `authenticator` filter, and use `username` for a `user` filter. You may also use the `$$name$$` token and the utility will supply `alias` or `username` as appropriate based on context. The following three requests are equivalent:
 
 ```
 ---
@@ -301,8 +297,38 @@ Again, remember to use `alias` in filter expressions if needed for a `connection
   type: connection
   filter: alias eq "mysftp"
 - operation: list
+  type: connection
+  filter: $$name$$ eq "mysftp"
+- operation: list
   connection: "mysftp"
 ```
+
+If you omit `type` from a request, the utility will attempt to locate objects of any type matching the filter expression. In this case you *must* use the `$$name$$` token in place of `alias` and `username` (if you are querying based on the object name) so the proper subsitution can be made while searching the different types.
+
+```
+---
+operation: list
+filter: $$name$$ sw "d"
+```
+
+A blank `filter` matches everything, so:
+
+```
+---
+operation: list
+type: connection
+filter: ""
+```
+
+will list all connections and:
+
+```
+---
+operation: list
+filter: ""
+```
+
+will list all objects (users, authenticators, and connections) in the configuration.
 
 ### [&lt;](#requests-) Results [&gt;](#-action-handling-)
 
@@ -461,6 +487,75 @@ In order to delete an existing action, create an action with the matching `alias
       - # other commands here
 ```
 
+#### Running actions
+
+You can run actions using the `run` operation. Use the `username` or `connection` properties in the request to identify the object whose action you want to run, and the `action` property to specify which of the user's or connection's actions to run:
+
+```
+- operation: run
+  username: testUser
+  action: other
+```
+
+or
+
+```
+- operation: run
+  connection: mysftp
+  action: dir
+```
+
+which will respond with the result:
+
+```
+- result:
+    status: success
+    message: ran action dir
+  output:
+    status: completed
+    result: success
+    messages:
+    - "2020/09/24 17:46:57   Run: type=\"API\""
+    - "2020/09/24 17:46:57   Command: \"DIR *\" type=\"SSH FTP\" line=1 threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:57      Detail: \"Connecting to ssh://127.0.0.1:22...\" threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:57      Detail: \"Server ID: SSH-2.0-OpenSSH_6.6.1p1 Ubuntu-2ubuntu2.13\" level=1 threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:57      Detail: \"RemotePort: 22\" level=1 threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:57      Detail: \"Authentication complete\" level=1 threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:58      Detail: \"Getting host file directory()...\" level=1 threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:58      SSH FTP: \"ls()\""
+    - "2020/09/24 17:46:58      Detail: \"2 file(s) found\" level=1 threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:58      Detail: \"-rw-rw-r-- 1000   1000              915 Sep 16 15:36 SERVER.req\" threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:58      Detail: \"-rw-rw-r-- 1000   1000            1,200 Sep 16 15:36 SERVER.crt\" threadId=\"l2izo4YsQt6vGIm2NtYcBw\""
+    - "2020/09/24 17:46:58      Result: \"Success\""
+    - "2020/09/24 17:46:58      SSH FTP: \"quit()\""
+    - 2020/09/24 17:46:58   End
+```
+
+If you do not specify a `username` or `connection`, the utility will search for all actions with the alias described by `action`. You can also search for actions matching filter criteria using `actionfilter` instead of `action`. If multiple actions are found, they will *all* be run. You can use `operation: list` to preview the actions that will be run.
+
+```
+- operation: run
+  actionfilter: alias sw "d"
+```
+
+Will find all actions, on any user or connection, whose alias starts with `d`, and will run them all.
+
+You can provide two additional request options to control the running of the action(s) as described in the [API reference](https://developer.cleo.com/api/api-reference/post-actions-actionid-run.html):
+
+```
+- operation: run
+  connection: mysftp
+  action: dir
+  timeout: 300
+  messagesCount: 100
+```
+
+#### Managing actions
+
+In addition to the `run` operation, the requests described above for actions can also be used to `list`, `update` and `delete` actions directly (these operations applied to the parent object also provide a mechanism for actions to be listed, updated, and deleted in a more contrained request context).
+
+Adding actions is only supported in the context of adding the parent object.
+
 ### [&lt;](#-action-handling-) Certificate Handling [&gt;](#-csv-files-and-templates)
 
 Like actions, certificates in the native Harmony API are handled as a separate linked resource.
@@ -518,7 +613,7 @@ resulting in the same effect as the following explicit YAML request file:
   authenticator: Users
 ```
 
-Provide a template using the `--template` command line option and `--input` for the CSV file.
+If your column headings are not legal JavaScript identifiers see [below](#token-replacement).
 
 ### Built-in templates
 
