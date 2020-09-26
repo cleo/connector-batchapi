@@ -143,23 +143,23 @@ public class REST {
         return execute(get, 200);
     }
 
-    public ObjectNode post(JsonNode json, JsonNode object) throws Exception {
-        return post(json, Json.getHref(object));
+    public ObjectNode post(JsonNode entity, JsonNode object) throws Exception {
+        return post(entity, Json.getHref(object));
     }
 
-    private ObjectNode post(JsonNode json, String href) throws Exception {
-        return post(json.toString(), new URI(this.baseUrl+href), 201);
+    private ObjectNode post(JsonNode entity, String href) throws Exception {
+        return post(entity, new URI(this.baseUrl+href), 201);
     }
 
-    private ObjectNode post(String entity, URI uri, int success) throws Exception {
+    private ObjectNode post(JsonNode entity, URI uri, int success) throws Exception {
         HttpPost post = new HttpPost(uri);
-        if (!Strings.isNullOrEmpty(entity)) {
-            post.setEntity(new StringEntity(entity));
+        if (entity != null && !entity.isMissingNode()) {
+            post.setEntity(new StringEntity(entity.toString()));
             post.addHeader("content-type", "application/json");
         }
         if (traceRequests) {
             String href = uri.toString().replaceFirst("^.*?[^/](?=/[^/])", "");
-            System.err.println("POST "+href+":\n"+Strings.nullToEmpty(entity));
+            System.err.println("POST "+href+":\n"+(entity==null ? "" : entity.toPrettyString()));
         }
         return execute(post, success);
     }
