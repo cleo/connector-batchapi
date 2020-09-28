@@ -7,6 +7,7 @@ import com.cleo.connector.api.interfaces.ConnectorBase;
 import com.cleo.connector.api.property.ConnectorPropertyException;
 import com.cleo.connector.common.ConfigFileImport;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
+import com.cleo.labs.connector.batchapi.processor.BatchProcessor.OutputFormat;
 import com.google.common.base.Strings;
 
 public class BatchAPIConnectorConfig {
@@ -52,6 +53,18 @@ public class BatchAPIConnectorConfig {
 
     public String getTemplate() throws ConnectorPropertyException {
         return ConfigFileImport.value(schema.template.getValue(client));
+    }
+
+    public OutputFormat getOutputFormat() throws ConnectorPropertyException {
+        String outputFormat = schema.outputFormat.getValue(client).trim();
+        if (!Strings.isNullOrEmpty(outputFormat)) {
+            return OutputFormat.valueOf(outputFormat);
+        }
+        return OutputFormat.yaml;
+    }
+
+    public String getOutputTemplate() throws ConnectorPropertyException {
+        return ConfigFileImport.value(schema.outputTemplate.getValue(client));
     }
 
     public boolean getIgnoreTLSChecks() throws ConnectorPropertyException {

@@ -61,19 +61,22 @@ If Java and the command line jar are properly installed, the following will work
 $ java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar --help
 usage: com.cleo.labs.connector.batchapi.processor.Main
     --help
-    --url <URL>                VersaLex url
- -k,--insecure                 Disable https security checks
- -u,--username <USERNAME>      Username
- -p,--password <PASSWORD>      Password
- -i,--input <FILE>             input file YAML, JSON or CSV
-    --generate-pass            Generate Passwords for users
-    --export-pass <PASSWORD>   Password to encrypt generated passwords
-    --operation <OPERATION>    default operation: list, add, update, delete or preview
-    --include-defaults         include all default values when listing connections
-    --template <TEMPLATE>      load CSV file using provided template
-    --profile <PROFILE>        Connection profile to use
-    --save                     Save/update profile
-    --remove                   Remove profile
+    --url <URL>                  VersaLex url
+ -k,--insecure                   Disable https security checks
+ -u,--username <USERNAME>        Username
+ -p,--password <PASSWORD>        Password
+ -i,--input <FILE>               input file YAML, JSON or CSV
+    --generate-pass              Generate Passwords for users
+    --export-pass <PASSWORD>     Password to encrypt generated passwords
+    --operation <OPERATION>      default operation: list, add, update, delete or preview
+    --output-format <FORMAT>     output format: yaml (default), json, or csv
+    --output-template <TEMPLATE> template for formatting csv output
+    --include-defaults           include all default values when listing connections
+    --template <TEMPLATE>        load CSV file using provided template
+    --profile <PROFILE>          Connection profile to use
+    --save                       Save/update profile
+    --remove                     Remove profile
+    --trace-requests             dump requests to stderr as a debugging aid
 ```
 
 You can provide all the connection parameters (`url`, `username` and `password`) on the command line, but this is both inconvenient and insecure. Instead it is preferable to setup a profile for each Harmony server you need to work with.
@@ -223,6 +226,8 @@ Command Line                    | Connector         | Description
 --generate-pass                 | Generate Password | Select to enable password generation for created users
 --export-pass &lt;PASSWORD&gt;  | Export Password   | Password used to encrypt generated passwords in the results file
 --operation &lt;OPERATION&gt;   | Default Operation | The default operation for entries lacking an explicit "operation"
+--output-format &lt;FORMAT&gt;  | Output Format     | Output format: yaml (default), json, or csv
+--output-template &lt;TEMPLATE&gt; | Output Template | Template for formatting csv output (required with csv)
 -k, --insecure                  | Ignore TLS Checks | Select to bypass TLS hostname and trusted issuer checks
 --profile &lt;PROFILE&gt;       | &nbsp;            | The named profile to load instead of "default"
 --include-defaults              | &nbsp;            | Include all default values when listing connections
@@ -231,7 +236,7 @@ Command Line                    | Connector         | Description
 --remove                        | &nbsp;            | Select to remove named profile (or "default")
 
 
-## [&LessLess;](#-configuration-reference-) Request Processing [&GreaterGreater;](#-csv-files-and-templates) ##
+## [&LessLess;](#-configuration-reference-) Request Processing [&GreaterGreater;](#-csv-files-and-templates-) ##
 
 ### Requests [&gt;](#-results-)
 
@@ -556,13 +561,13 @@ In addition to the `run` operation, the requests described above for actions can
 
 Adding actions is only supported in the context of adding the parent object.
 
-### [&lt;](#-action-handling-) Certificate Handling [&gt;](#-csv-files-and-templates)
+### [&lt;](#-action-handling-) Certificate Handling [&gt;](#-csv-files-and-templates-)
 
 Like actions, certificates in the native Harmony API are handled as a separate linked resource.
 
 The batch utility will be updated to handle certificates as nested objects, but today certificates must be handled outside of the utility.
 
-## [&LessLess;](#-request-processing-) CSV Files and Templates
+## [&LessLess;](#-request-processing-) CSV Files and Templates [&GreaterGreater;] (#-formatting-results)
 
 In many cases involving batch operations, most parts of each request, or at least the request skeleton, are the same.
 The detais for each request can then conveniently be represented in tabular form.
@@ -723,6 +728,7 @@ In fact the `token` is more accurately described as a JavaScript expression. Eve
 
 Whenever an `${expression}` appears with other text or tokens, it is converted into a string. If an `${expression}` appears all by itself in a value as a _singleton_, in some cases it is necessary to make sure it is rendered as a scalar of a specific type. This can be achieved by appending `:int`, `:boolean` or `:string` to force the appropriate interpretation.
 
+Note that there are places in the Harmony API where `true` or `false` is a boolean, while in other places it must be quoted as a string `"true"` or `"false"` (because the property in question may take other possible values, so it is modeled in the API as a String). Use `:boolean` whenever the property is a true boolean&mdash;otherwise it will be evaluated as a string.
 
 #### Manipulating tree structure
 
@@ -865,3 +871,60 @@ the `usage: download` field will prevent the entry in the `default:` array from 
 #### Testing your template
 
 Use `--operation preview` to test the effects of your template on your CSV data. No API calls will be made to the Harmony API, but the requests will be converted to YAML and displayed directly in the result output with the message "request preview".
+
+## [&LessLess;](#-csv-files-and-templates-) Formatting Results
+
+By default the results of processing the requests in the input file(s) is(are) reported in a YAML format, as illustrated in several examples above. Some additional options allow this format to be altered.
+
+If JSON output is preferred to YAML, use `--output-format json` on the command line or select `Output Format: json` in the connector configuration. JSON output is structurally identical to YAML&mdash;the syntax is just changed to use only valid JSON constructs. The JSON is indented ("pretty printed") for easier reading by humans in a fashion that does not affect automated processing by programs.
+
+CSV output is not structurally equivalent to YAML and JSON, so an additional processing step is required to "flatten" the results into a row/column tabular format suitable for output in CSV. This "flattening" process is controlled by an output template, using the same expressions and features of the templates used to process CSV input. But the output template must be "flat": a simple object whose field names correspond to CSV columns and whose values are simple values (strings, booleans, numbers) and not nested objects or arrays.
+
+While the source for mapping input CSV files is a set of columns, referenced in the template as `${column['column name']}` (or `${column name}` for suitably named columns), the source for the output CSV template is the result object named simply `${data}`. For example, a simple template to report on added users might be:
+
+```
+---
+user: ${data.username}
+password: ${data.accept.password}
+email: ${data.email}
+group: {$data.authenticator}
+```
+
+As with input templates, values that are missing or null are skipped.
+
+The resulting CSV file will include a column heading line whose labels match the field names in the template (enclose the field names in quotes if they are not valid JavaScript identifiers). The order of the columns will be the order in which values are discovered in the output, and the column types will be inferred from the content found.
+
+To provide more control over the column headers, you may include a list of columns at the beginning of the template. This will force columns in the specified order in the output schema, even if no entries produce values for those columns. To define columns, include a `columns` field in the template, followed by a `template` field encapsulating the actual template. For example:
+
+```
+---
+columns:
+- name: user
+- name: email
+- name: password
+- name: group
+- name: extra
+template:
+- ${if:data.username}:
+    user: ${data.username}
+    email: ${data.email}
+    password: ${data.accept.password}
+    group: ${data.authenticator}
+    ${if:data.accept.sftp.key}:
+      sftpkey: true
+```
+
+will include the `user`, `email`, `password`, `group` and `extra` columns, whether they have values or not. The `sftpkey` column will be added if any results are present with that field (those for which `data.accept.sftp.key` has a value).
+
+Additionally, this template produces an output line only if `data.username` is present, skipping over result entries of other types. This could be useful, for example, with a list operation on an authenticator (group), which includes the authenticator (skipped) and all its associated users (included) in the output.
+
+Notice also that this template is structured as an array (although there is only one entry in the array). If a template includes multiple array entries that produce output, this will result in multiple lines being produced in the CSV output.
+
+Errors that occur during processing of the request will have corresponding error results. They can be mapped into the CSV output or not, depending on the requirements (`${data.result.status}` will be `'error'`). Any errors that occur during the "flattening" of results into rows for the CSV output will be appended to the CSV file as text. You can use `${error}` to propagate error results to CSV errors with a construct like:
+
+```
+---
+${if:data.result.status=='error'}:
+  ${error}: ${data.result.message}
+...
+```

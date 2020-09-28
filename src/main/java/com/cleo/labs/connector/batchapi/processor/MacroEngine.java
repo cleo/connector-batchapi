@@ -49,6 +49,7 @@ public class MacroEngine {
     private ScriptEngine engine;
     private Date now;
     private Map<String, String> data;
+    private JsonNode object;
 
     /**
      * Returns {@code true} if the {@link ScriptEngine} has been started.
@@ -76,7 +77,9 @@ public class MacroEngine {
             engine.eval("load('nashorn:mozilla_compat.js');"
                     + "function date(format) { return new java.text.SimpleDateFormat(format).format(now); }");
             engine.put("now", now);
-            data(data);
+            if (data!=null) {
+                data(data);
+            }
         }
     }
 
@@ -85,9 +88,10 @@ public class MacroEngine {
      * {@link ScriptEngine}.
      * 
      */
-    public MacroEngine(Map<String, String> data) {
+    public MacroEngine() {
         this.now = new Date();
-        this.data = data;
+        this.data = null;
+        this.object = null;
     }
 
     /**
@@ -145,6 +149,30 @@ public class MacroEngine {
         return this;
     }
 
+    /**
+     * Sets the JsonNode object for the engine.
+     * @param object the JsonNode (ignored if {@code null}).
+     * @return {@code this} to allow for fluent-style setting
+     * @throws ScriptException
+     */
+    public MacroEngine object(JsonNode object) throws ScriptException {
+        clear();
+        if (object != null) {
+            this.object = object;
+            startEngine();
+            engine.eval("var data="+object.toString());
+        }
+        return this;
+    }
+
+    /**
+     * Returns the current JsonNode object for the engine.
+     * @return the current JsonNode object for the engine (possibly null)
+     */
+    public JsonNode object() {
+        return this.object;
+    }
+
     private static final String INT_SUFFIX = ":int";
     private static final String BOOLEAN_SUFFIX = ":boolean";
     private static final String ARRAY_SUFFIX = ":array";
@@ -193,10 +221,7 @@ public class MacroEngine {
             }
             m.appendTail(sb);
             String value = sb.toString();
-            if (value.matches("(?i)true|false")) {
-                return BooleanNode.valueOf(value.matches("(?i)true"));
-            }
-            return TextNode.valueOf(sb.toString());
+            return TextNode.valueOf(value);
         }
     }
 
@@ -260,7 +285,8 @@ public class MacroEngine {
         try {
             return engine.eval(expr);
         } catch (ScriptException e) {
-            if (e.getMessage().startsWith("ReferenceError:")) {
+            if (e.getMessage().startsWith("ReferenceError:") ||
+                    e.getMessage().startsWith("TypeError:")) {
                 return null;
             }
             throw e;
@@ -336,13 +362,12 @@ public class MacroEngine {
                 return IntNode.valueOf((Integer)result);
             } else if (result instanceof Double) {
                 return DoubleNode.valueOf((Double)result);
-            } else if (result.toString().matches("(?i)true|false")) {
-                return BooleanNode.valueOf(result.toString().matches("(?i)true"));
             } else {
                 return TextNode.valueOf(result.toString());
             }
         } catch (ScriptException e) {
-            if (e.getMessage().startsWith("ReferenceError:")) {
+            if (e.getMessage().startsWith("ReferenceError:") ||
+                    e.getMessage().startsWith("TypeError:")) {
                 return null;
             }
             throw e;
@@ -392,5 +417,6 @@ public class MacroEngine {
             }
         }
         data = null;
+        object = null;
     }
 }

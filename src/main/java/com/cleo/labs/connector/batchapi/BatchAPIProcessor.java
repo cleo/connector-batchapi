@@ -1,7 +1,5 @@
 package com.cleo.labs.connector.batchapi;
 
-import static com.cleo.labs.connector.batchapi.processor.BatchProcessor.Option.generatePass;
-
 import java.io.ByteArrayOutputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -53,7 +51,7 @@ public class BatchAPIProcessor extends FilterOutputStream {
 
         BatchProcessor processor = new BatchProcessor(restClient);
         try {
-            processor.set(generatePass, config.getGeneratePasswords());
+            processor.setGeneratePasswords(config.getGeneratePasswords());
             if (!Strings.isNullOrEmpty(config.getExportPassword())) {
                 processor.setExportPassword(config.getExportPassword());
             }
@@ -64,6 +62,11 @@ public class BatchAPIProcessor extends FilterOutputStream {
             String template = config.getTemplate();
             if (!Strings.isNullOrEmpty(template)) {
                 processor.setTemplate(template);
+            }
+            processor.setOutputFormat(config.getOutputFormat());
+            String outputTemplate = config.getOutputTemplate();
+            if (!Strings.isNullOrEmpty(outputTemplate)) {
+                processor.setOutputTemplate(outputTemplate);
             }
         } catch (ConnectorPropertyException ignore) {}
 

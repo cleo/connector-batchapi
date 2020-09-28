@@ -32,6 +32,7 @@ public class TemplateExpander {
     private MacroEngine engine;
     private JsonNode template;
     private List<Map<String,String>> data;
+    private ArrayNode jsondata;
 
     /*-- constructors --------------------------------------------------------*/
 
@@ -40,7 +41,7 @@ public class TemplateExpander {
      * that is initialized without any data loaded.
      */
     public TemplateExpander() {
-        this(new MacroEngine(null));
+        this(new MacroEngine());
     }
 
     /**
@@ -49,11 +50,23 @@ public class TemplateExpander {
      */
     public TemplateExpander(MacroEngine engine) {
         this.engine = engine;
-        this.data = null;
         this.template = null;
+        this.data = null;
+        this.jsondata = null;
     }
 
     /*-- the template --------------------------------------------------------*/
+
+    /**
+     * Set a YAML template from an already parsed JsonNode.
+     * @param template the JsonNode template
+     * @return {@code this} for fluent style setup
+     * @throws IOException
+     */
+    public TemplateExpander template(JsonNode template) throws IOException {
+        this.template = template;
+        return this;
+    }
 
     /**
      * Load a YAML template by parsing it from a String.
@@ -62,8 +75,7 @@ public class TemplateExpander {
      * @throws IOException
      */
     public TemplateExpander template(String content) throws IOException {
-        this.template = Json.mapper.readTree(content);
-        return this;
+        return template(Json.mapper.readTree(content));
     }
 
     /**
@@ -92,10 +104,12 @@ public class TemplateExpander {
     /*-- the data ------------------------------------------------------------*
      * The core model for the TemplateExpander is expanding a sequence of     *
      * "lines" parsed from a CSV file, each line represented as a Map whose   *
-     * keys come from the column headings and values come from the CSV line.  *
-     * The Expander Iterator/Iterable iterates over these "lines", resetting  *
-     * the data in the MacroEngine for each line.                             *
-     *----------- ------------------------------------------------------------*/
+     * keys come from the column headings and values come from the CSV line,  *
+     * or the TemplateExpander is expanding a sequence of Json Objects,       *
+     * retrieved from a Json ArrayNode.                                       *
+     * The Expander Iterator/Iterable iterates over these "lines" or          *
+     * "objects", resetting the data in the MacroEngine for each line.        *
+     *------------------------------------------------------------------------*/
 
     /**
      * Set/replace the data lines by parsing CSV content from a String.
@@ -148,11 +162,23 @@ public class TemplateExpander {
     }
 
     /**
+     * Use a Json ArrayNode instead of CSV lines as the source
+     * for template expansion.
+     * @param jsondata the source of template data
+     * @return {@code this} for fluent style setup
+     */
+    public TemplateExpander jsondata(ArrayNode jsondata) {
+        this.jsondata = jsondata;
+        return this;
+    }
+
+    /**
      * Clears the data.
      * @return {@code this} for fluent style setup
      */
     public TemplateExpander clear() {
         data = null;
+        jsondata = null;
         return this;
     }
 
@@ -509,9 +535,11 @@ public class TemplateExpander {
                 }
             }
             return result.size() > 0 ? result : null;
-        } else {
+        } else if (node.isTextual()) {
             JsonNode x = engine.expand(node.asText());
             return x;
+        } else {
+            return node;
         }
     }
 
@@ -522,6 +550,7 @@ public class TemplateExpander {
         private JsonNode expanded;
         private Exception exception;
         private Map<String,String> line;
+        private JsonNode object;
         public ExpanderResult lineNumber(int lineNumber) {
             this.lineNumber = lineNumber;
             return this;
@@ -553,6 +582,13 @@ public class TemplateExpander {
         public Map<String,String> line() {
             return this.line;
         }
+        public ExpanderResult object(JsonNode object) {
+            this.object = object;
+            return this;
+        }
+        public JsonNode object() {
+            return this.object;
+        }
         public ExpanderResult() {
             this.expanded = null;
             this.exception = null;
@@ -575,29 +611,52 @@ public class TemplateExpander {
 
     public class Expander implements Iterator<ExpanderResult>, Iterable<ExpanderResult> {
         private Iterator<Map<String,String>> dataIterator;
+        private Iterator<JsonNode> jsonIterator;
         private int lineNumber;
 
         public Expander() {
-            dataIterator = data.iterator();
-            lineNumber = 1; // start at 1 to count the header line
+            if (data != null) {
+                dataIterator = data.iterator();
+                jsonIterator = null;
+                lineNumber = 1; // start at 1 to count the header line
+            } else {
+                dataIterator = null;
+                jsonIterator = jsondata.elements();
+                lineNumber = 0;
+            }
         }
 
         @Override
         public boolean hasNext() {
-            return dataIterator.hasNext();
+            if (dataIterator != null) {
+                return dataIterator.hasNext();
+            } else {
+                return jsonIterator.hasNext();
+            }
         }
 
         @Override
         public ExpanderResult next() {
-            Map<String,String> line = dataIterator.next();
             ExpanderResult result = new ExpanderResult()
-                    .lineNumber(++lineNumber)
-                    .line(line);
-            try {
-                engine.data(line);
-                result.expanded(expand(template));
-            } catch (Exception e) {
-                result.exception(e);
+                    .lineNumber(++lineNumber);
+            if (dataIterator != null) {
+                Map<String,String> line = dataIterator.next();
+                result.line(line);
+                try {
+                    engine.data(line);
+                    result.expanded(expand(template));
+                } catch (Exception e) {
+                    result.exception(e);
+                }
+            } else {
+                JsonNode object = jsonIterator.next();
+                result.object(object);
+                try {
+                    engine.object(object);
+                    result.expanded(expand(template));
+                } catch (Exception e) {
+                    result.exception(e);
+                }
             }
             return result;
         }

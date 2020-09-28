@@ -9,6 +9,10 @@ import com.google.common.base.Strings;
 
 public class Json {
 
+    public static final YAMLFactory yamlin = new YAMLFactory()
+            .configure(YAMLGenerator.Feature.SPLIT_LINES, false);
+    public static final ObjectMapper mapperin = new ObjectMapper(yamlin);
+
     public static final YAMLFactory yaml = new YAMLFactory()
             .configure(YAMLGenerator.Feature.MINIMIZE_QUOTES, true)
             .configure(YAMLGenerator.Feature.SPLIT_LINES, false);

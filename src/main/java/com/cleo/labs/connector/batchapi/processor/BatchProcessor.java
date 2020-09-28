@@ -16,10 +16,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.cleo.labs.connector.batchapi.processor.template.CsvExpander;
 import com.cleo.labs.connector.batchapi.processor.template.TemplateExpander;
 import com.cleo.labs.connector.batchapi.processor.versalex.StubVersaLex;
 import com.cleo.labs.connector.batchapi.processor.versalex.VersaLex;
+import com.fasterxml.jackson.core.JsonGenerator.Feature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Charsets;
@@ -28,23 +32,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.io.Resources;
 
 public class BatchProcessor {
-    public enum Option {generatePass};
-    public BatchProcessor set(Option o) {
-        return set(o, true);
-    }
-    public BatchProcessor set(Option o, boolean value) {
-        if (value) {
-            options.add(o);
-        } else {
-            options.remove(o);
-        }
-        return this;
-    }
-    public BatchProcessor setExportPassword(String exportPassword) {
-        this.exportPassword = exportPassword;
-        return this;
-    }
-
     public enum Operation {
         add ("created"),
         list ("found"),
@@ -62,11 +49,28 @@ public class BatchProcessor {
         }
     };
 
+    public enum OutputFormat {yaml, json, csv};
+
+    private REST api;
+    private String exportPassword;
+    private Operation defaultOperation;
+    private String template;
+    private boolean traceRequests;
+    private boolean generatePasswords;
+    private OutputFormat outputFormat;
+    private String outputTemplate;
+    private VersaLex versalex;
+
+    public BatchProcessor setExportPassword(String exportPassword) {
+        this.exportPassword = exportPassword;
+        return this;
+    }
+
     public BatchProcessor setDefaultOperation(Operation defaultOperation) {
-        if (defaultOperation == null) {
-            throw new IllegalArgumentException("defaultOperation may not be null");
+        if (defaultOperation != null) {
+            // null means "leave the same": add by default
+            this.defaultOperation = defaultOperation;
         }
-        this.defaultOperation = defaultOperation;
         return this;
     }
 
@@ -84,13 +88,27 @@ public class BatchProcessor {
         return this;
     }
 
-    private REST api;
-    private EnumSet<Option> options;
-    private String exportPassword;
-    private Operation defaultOperation;
-    private String template;
-    private VersaLex versalex;
-    private boolean traceRequests;
+    public BatchProcessor setGeneratePasswords(boolean generatePasswords) {
+        this.generatePasswords = generatePasswords;
+        return this;
+    }
+
+    public BatchProcessor setOutputFormat(OutputFormat outputFormat) {
+        if (outputFormat != null) {
+            // null means "leave the same": yaml by default
+            this.outputFormat = outputFormat;
+        }
+        return this;
+    }
+
+    public BatchProcessor setOutputTemplate(Path outputTemplate) throws IOException {
+        return setOutputTemplate(new String(Files.readAllBytes(outputTemplate), Charsets.UTF_8));
+    }
+
+    public BatchProcessor setOutputTemplate(String outputTemplate) {
+        this.outputTemplate = outputTemplate;
+        return this;
+    }
 
     private void loadVersaLex() {
         try {
@@ -751,8 +769,10 @@ public class BatchProcessor {
         }
         // Create user
         String pwdhash = Json.asText(request.entry.remove("pwdhash"));
-        if (pwdhash != null || options.contains(Option.generatePass)) {
-            Json.setSubElement(request.entry, "accept.password", generatePassword());
+        String generatedPwd = null;
+        if (pwdhash != null || generatePasswords) {
+            generatedPwd = generatePassword();
+            Json.setSubElement(request.entry, "accept.password", generatedPwd);
         }
         ObjectNode user = api.createUser(request.entry, authenticator);
         if (user == null) {
@@ -761,8 +781,12 @@ public class BatchProcessor {
         if (pwdhash != null) {
             versalex.set(alias, request.resource, "Pwdhash", pwdhash);
             user.put("pwdhash", pwdhash);
-        } else if (options.contains(Option.generatePass)) {
-            passwords.add(generatedPassword(alias, request.entry));
+        } else if (generatePasswords) {
+            if (outputFormat == OutputFormat.csv) {
+                Json.setSubElement(user, "accept.password", generatedPwd);
+            } else {
+                passwords.add(generatedPassword(alias, request.entry));
+            }
         }
         if (actions != null) {
             createActions(actions, user);
@@ -1119,19 +1143,21 @@ public class BatchProcessor {
         if (existing && request.resourceType != null &&
                 (!request.resourceType.equals(request.resourceClass.name()) ||
                  request.resourceFilter != null && request.resource != null)) {
+            List<String> clauses = new ArrayList<>();
             if (!Strings.isNullOrEmpty(request.resourceFilter)) {
-                request.resourceFilter = "("+request.resourceFilter+")";
-            } else {
-                request.resourceFilter = "";
+                clauses.add("("+request.resourceFilter+")");
             }
             if (!request.resourceType.equals(request.resourceClass.name())) {
-                request.resourceFilter += " and type eq \""+request.resourceType+"\"";
+                clauses.add("type eq \""+request.resourceType+"\"");
             }
             // if there is a specific resource name requested, add it to the filter as well
             if (request.resource != null) {
                 // this won't include users, so "alias" is always correct
-                request.resourceFilter += " and "+NAMETOKEN+" eq \""+request.resource+"\"";
+                clauses.add(NAMETOKEN+" eq \""+request.resource+"\"");
                 request.resource = null;
+            }
+            if (!clauses.isEmpty()) {
+                request.resourceFilter = clauses.stream().collect(Collectors.joining(" and "));
             }
         }
 
@@ -1414,7 +1440,29 @@ public class BatchProcessor {
             processFile(fn, content);
         }
 
-        Json.mapper.writeValue(System.out, calculateResults());
+        ArrayNode output = calculateResults();
+        switch (outputFormat) {
+        case yaml:
+            Json.mapper.writeValue(System.out, output);
+            break;
+        case json:
+            new ObjectMapper()
+                .configure(SerializationFeature.INDENT_OUTPUT, true)
+                .configure(Feature.AUTO_CLOSE_TARGET, false)
+                .writeValue(System.out, output);
+            System.out.println();
+            break;
+        case csv:
+            try {
+                new CsvExpander()
+                    .template(outputTemplate)
+                    .data(output)
+                    .writeTo(System.out);
+            } catch (Exception e) {
+                throw new IOException(e);
+            }
+            break;
+        }
     }
 
     /**
@@ -1423,21 +1471,13 @@ public class BatchProcessor {
      * @param api the REST api connection to use
      */
     public BatchProcessor(REST api) {
-        this (api, EnumSet.noneOf(Option.class), null);
-    }
-
-    /**
-     * All argument constructor.
-     * @param api the REST api connection to use
-     * @param options the set of toggle options
-     * @param exportPassword the export password option
-     */
-    public BatchProcessor(REST api, EnumSet<Option> options, String exportPassword) {
         this.api = api;
-        this.options = options;
-        this.exportPassword = exportPassword;
+        this.exportPassword = null;
         this.defaultOperation = Operation.add;
         this.template = null;
+        this.traceRequests = false;
+        this.generatePasswords = false;
+        this.outputFormat = OutputFormat.yaml;
         loadVersaLex();
         reset();
     }

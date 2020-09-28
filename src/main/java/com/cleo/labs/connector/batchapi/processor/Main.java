@@ -1,7 +1,5 @@
 package com.cleo.labs.connector.batchapi.processor;
 
-import static com.cleo.labs.connector.batchapi.processor.BatchProcessor.Option.generatePass;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -20,6 +18,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
+import com.cleo.labs.connector.batchapi.processor.BatchProcessor.OutputFormat;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -91,6 +90,22 @@ public class Main {
                 .hasArg()
                 .argName("OPERATION")
                 .desc("default operation: list, add, update, delete or preview")
+                .required(false)
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("output-format")
+                .hasArg()
+                .argName("FORMAT")
+                .desc("output format: yaml (default), json, or csv")
+                .required(false)
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("output-template")
+                .hasArg()
+                .argName("TEMPLATE")
+                .desc("template for formatting csv output")
                 .required(false)
                 .build());
 
@@ -269,16 +284,27 @@ public class Main {
         CommandLine cmd = null;
         Profile profile = null;
         BatchProcessor.Operation operation = null;
+        BatchProcessor.OutputFormat outputFormat = null;
+        String outputTemplate = null;
         try {
             Options options = getOptions();
             cmd = parser.parse(options, args);
             checkHelp(cmd);
             profile = processProfileOptions(cmd);
             if (cmd.hasOption("operation")) {
-                operation = BatchProcessor.Operation.valueOf(cmd.getOptionValue("operation"));
+                operation = Operation.valueOf(cmd.getOptionValue("operation"));
+            }
+            if (cmd.hasOption("output-format")) {
+                outputFormat = OutputFormat.valueOf(cmd.getOptionValue("output-format"));
+                if (outputFormat == OutputFormat.csv) {
+                    if (!cmd.hasOption("output-template")) {
+                        throw new Exception("output-template is required when output-format is csv");
+                    }
+                    outputTemplate = cmd.getOptionValue("output-template");
+                }
             }
         } catch (Exception e) {
-            System.out.println("Could not parse command line arguments: " + e.getMessage());
+            System.err.println("Could not parse command line arguments: " + e.getMessage());
             System.exit(-1);
         }
 
@@ -290,21 +316,22 @@ public class Main {
                     restClient.includeDefaults(cmd.hasOption("include-defaults"));
                     restClient.traceRequests(cmd.hasOption("trace-requests"));
                 } catch (Exception e) {
-                    System.out.println("Failed to create REST Client: " + e.getMessage());
+                    System.err.println("Failed to create REST Client: " + e.getMessage());
                     System.exit(-1);
                 }
             }
-            BatchProcessor processor = new BatchProcessor(restClient).set(generatePass, cmd.hasOption("generate-pass"));
-            if (!Strings.isNullOrEmpty(profile.getExportPassword())) {
-                processor.setExportPassword(profile.getExportPassword());
-            }
-            if (operation != null) {
-                processor.setDefaultOperation(operation);
-            }
+            BatchProcessor processor = new BatchProcessor(restClient)
+                .setGeneratePasswords(cmd.hasOption("generate-pass"))
+                .setExportPassword(profile.getExportPassword())
+                .setDefaultOperation(operation)
+                .setTraceRequests(cmd.hasOption("trace-requests"))
+                .setOutputFormat(outputFormat);
             if (cmd.hasOption("template")) {
                 processor.setTemplate(Paths.get(cmd.getOptionValue("template")));
             }
-            processor.setTraceRequests(cmd.hasOption("trace-requests"));
+            if (outputTemplate != null) {
+                processor.setOutputTemplate(Paths.get(outputTemplate));
+            }
             processor.processFiles(cmd.getOptionValues("input"));
         }
     }

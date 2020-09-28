@@ -17,6 +17,7 @@ import com.cleo.connector.api.property.CommonProperty;
 import com.cleo.connector.api.property.PropertyBuilder;
 import com.cleo.connector.common.ConfigFileImport;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
+import com.cleo.labs.connector.batchapi.processor.BatchProcessor.OutputFormat;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
 
@@ -77,13 +78,39 @@ public class BatchAPIConnectorSchema extends ConnectorConfig {
             .setRequired(false)
             .setDescription("The default operation to use for request entries without an explicit operation")
             .setAllowedInSetCommand(true)
-            .addPossibleValues("", Operation.list.name(), Operation.add.name(), Operation.update.name(), Operation.delete.name())
+            .addPossibleValues("",
+                    Operation.list.name(),
+                    Operation.add.name(),
+                    Operation.update.name(),
+                    Operation.delete.name(),
+                    Operation.preview.name(),
+                    Operation.run.name())
             .setGroup(Connect)
             .build();
 
     @Property
     final IConnectorProperty<String> template = new PropertyBuilder<>("Template", "")
-            .setDescription("Explicit template to use when processing files")
+            .setDescription("Explicit template to use when processing CSV request files")
+            .setGroup(Connect)
+            .setExtendedClass(ConfigFileImport.class)
+            .setRequired(false)
+            .build();
+
+    @Property
+    final IConnectorProperty<String> outputFormat = new PropertyBuilder<>("OutputFormat", "")
+            .setRequired(false)
+            .setDescription("The output format for the result files (YAML by default)")
+            .setAllowedInSetCommand(true)
+            .addPossibleValues("",
+                    OutputFormat.yaml.name(),
+                    OutputFormat.json.name(),
+                    OutputFormat.csv.name())
+            .setGroup(Connect)
+            .build();
+
+    @Property
+    final IConnectorProperty<String> outputTemplate = new PropertyBuilder<>("OutputTemplate", "")
+            .setDescription("Template to use when formatting CSV response files")
             .setGroup(Connect)
             .setExtendedClass(ConfigFileImport.class)
             .setRequired(false)

@@ -5,7 +5,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,7 +25,7 @@ public class TestMacroEngine {
             Map<String,String> data = new HashMap<>();
             data.put("a", "alice");
             data.put("b", "bob");
-            MacroEngine engine = new MacroEngine(data);
+            MacroEngine engine = new MacroEngine().data(data);
             JsonNode result;
 
             result = engine.expand("${a}");
@@ -60,7 +59,7 @@ public class TestMacroEngine {
     @Test
     public void testClear() throws ScriptException {
         // starts with two bindings: date() and now
-        MacroEngine engine = new MacroEngine(null);
+        MacroEngine engine = new MacroEngine();
         engine.isTrue("true"); // force a start
         int empty = engine.bindings().size();
 
@@ -99,7 +98,7 @@ public class TestMacroEngine {
         data.put("a", "alice");
         data.put("b", "bob");
         data.put("d", null);
-        MacroEngine engine = new MacroEngine(data);
+        MacroEngine engine = new MacroEngine().data(data);
         JsonNode result;
 
         result = engine.expand("${c}");
@@ -127,7 +126,7 @@ public class TestMacroEngine {
         data.put("SSHFTP", "No");
         data.put("HTTP", "Yes");
         data.put("Access", "ReadOnly");
-        MacroEngine engine = new MacroEngine(data);
+        MacroEngine engine = new MacroEngine().data(data);
         
         TemplateExpander expander = new TemplateExpander(engine)
                 .template(TemplateExpander.class.getResource("default/authenticator.yaml"))
@@ -170,7 +169,7 @@ public class TestMacroEngine {
         data.put("action_1_alias", "actnow");
         data.put("action_1_commands", "LCOPY * %inbox%;PUT -DEL foo.txt");
         data.put("action_1_schedule", "polling");
-        MacroEngine engine = new MacroEngine(data);
+        MacroEngine engine = new MacroEngine().data(data);
         
         TemplateExpander expander = new TemplateExpander(engine)
                 .template(TemplateExpander.class.getResource("default/as2.yaml"))
@@ -207,7 +206,7 @@ public class TestMacroEngine {
         data.put("action_1_alias", "actnow");
         data.put("action_1_commands", "LCOPY * %inbox%;PUT -DEL foo.txt");
         data.put("action_1_schedule", "polling");
-        MacroEngine engine = new MacroEngine(data);
+        MacroEngine engine = new MacroEngine().data(data);
         
         TemplateExpander expander = new TemplateExpander(engine)
                 .template(TemplateExpander.class.getResource("default/sftp.yaml"))
@@ -247,7 +246,7 @@ public class TestMacroEngine {
         data.put("action_1_alias", "actnow");
         data.put("action_1_commands", "LCOPY * %inbox%;PUT -DEL foo.txt");
         data.put("action_1_schedule", "polling");
-        MacroEngine engine = new MacroEngine(data);
+        MacroEngine engine = new MacroEngine().data(data);
         
         TemplateExpander expander = new TemplateExpander(engine)
                 .template(TemplateExpander.class.getResource("default/ftp.yaml"))
@@ -280,7 +279,7 @@ public class TestMacroEngine {
         data.put("HostNotes", "NA");
         data.put("OtherFolder", "local/test;local/test1");
         data.put("Email", "admiralbev@cleo.com");
-        MacroEngine engine = new MacroEngine(data);
+        MacroEngine engine = new MacroEngine().data(data);
         
         TemplateExpander expander = new TemplateExpander(engine)
                 .template(TemplateExpander.class.getResource("default/user.yaml"))
@@ -297,7 +296,7 @@ public class TestMacroEngine {
 
     @Test
     public void testArray() throws ScriptException {
-        MacroEngine engine = new MacroEngine(Collections.emptyMap());
+        MacroEngine engine = new MacroEngine();
         JsonNode result;
 
         result = engine.expand("${'foo bar bat'.split(' '):array}");
