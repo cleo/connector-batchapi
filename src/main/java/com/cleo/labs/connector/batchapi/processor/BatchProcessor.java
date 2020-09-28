@@ -1394,6 +1394,7 @@ public class BatchProcessor {
                             }
                         }
                     }
+                    break;
                 case run:
                     {
                         ArrayNode tempResults = Json.mapper.createArrayNode();
