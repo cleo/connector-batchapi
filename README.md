@@ -820,7 +820,7 @@ Processing is similar to a conditional, except that the value node of the `${for
 
 The `expression` should be an array expression: the most usual case is something like `${for id:value.split(/;/)}` to separate a multi-valued column value into its parts. Constant arrays can also be used like `${for id:[1,2,3]}`.
 
-The `regex` may have a capture group to map a match subportion of the column name to the bound `identifier`. If no capture groups are defined, the whole column name is used. Only the first capture group is used. For example, the action&lowbar;<i>alias</i>&lowbar;xxx columns are processed in the built-in templates as follows:
+The `regex` may have a capture group to map a matching subportion of the column name to the bound `identifier`. If no capture groups are defined, the whole column name is used. Only the first capture group is used. For example, the action&lowbar;<i>alias</i>&lowbar;xxx columns are processed in the built-in templates as follows:
 
 ```
 - connection: ${alias}

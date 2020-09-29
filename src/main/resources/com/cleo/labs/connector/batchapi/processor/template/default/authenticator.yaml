@@ -1,6 +1,6 @@
 ---
 type: nativeUser
-alias: ${UserAlias}
+authenticator: ${UserAlias}
 resourceFolder: ${FolderPath}
 home:
   enabled: true
@@ -17,20 +17,20 @@ home:
     - ${for other:OtherFolder.split(';')}:
         usage: other
         path: ${other}
+  access: ${Access.toLowerCase()}
 incoming:
   storage:
     sentbox: ${ArchiveSent}
 outgoing:
   storage:
     receivedbox: ${ArchiveReceived}
-  access: ${Access.toLowerCase()}
 accept:
   ftp:
-    enabled: ${FTP.match(/^(yes|true)$/i):boolean}
+    enabled: ${FTP:boolean}
   sftp:
-    enabled: ${SSHFTP.match(/^(yes|true)$/i):boolean}
+    enabled: ${SSHFTP:boolean}
   http:
-    enabled: ${HTTP.match(/^(yes|true)$/i):boolean}
+    enabled: ${HTTP:boolean}
   security:
     requireIPFilter: false
     passwordRules:
