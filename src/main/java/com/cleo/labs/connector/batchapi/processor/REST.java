@@ -169,18 +169,18 @@ public class REST {
     }
 
     private ObjectNode put(JsonNode json, String href) throws Exception {
-        return put(json.toString(), new URI(this.baseUrl+href));
+        return put(json, new URI(this.baseUrl+href));
     }
 
-    private ObjectNode put(String entity, URI uri) throws Exception {
+    private ObjectNode put(JsonNode entity, URI uri) throws Exception {
         HttpPut put = new HttpPut(uri);
-        if (!Strings.isNullOrEmpty(entity)) {
-            put.setEntity(new StringEntity(entity));
+        if (entity != null && !entity.isMissingNode()) {
+            put.setEntity(new StringEntity(entity.toString()));
             put.addHeader("content-type", "application/json");
         }
         if (traceRequests) {
             String href = uri.toString().replaceFirst("^.*?[^/](?=/[^/])", "");
-            System.err.println("PUT "+href+":\n"+Strings.nullToEmpty(entity));
+            System.err.println("PUT "+href+":\n"+(entity==null ? "" : entity.toPrettyString()));
         }
         return execute(put, 200);
     }
