@@ -227,7 +227,7 @@ Command Line                    | Connector         | Description
 --export-pass &lt;PASSWORD&gt;  | Export Password   | Password used to encrypt generated passwords in the results file
 --operation &lt;OPERATION&gt;   | Default Operation | The default operation for entries lacking an explicit "operation"
 --output-format &lt;FORMAT&gt;  | Output Format     | Output format: yaml (default), json, or csv
---output-template &lt;TEMPLATE&gt; | Output Template | Template for formatting csv output (required with csv)
+--output-template&nbsp;&lt;TEMPLATE&gt; | Output Template | Template for formatting csv output (required with csv)
 -k, --insecure                  | Ignore TLS Checks | Select to bypass TLS hostname and trusted issuer checks
 --profile &lt;PROFILE&gt;       | &nbsp;            | The named profile to load instead of "default"
 --include-defaults              | &nbsp;            | Include all default values when listing connections
@@ -294,7 +294,7 @@ For example, to query for all SFTP connections, use:
   filter: type eq "sftp"
 ```
 
-Again, remember to use `alias` in filter expressions if needed for a `connection` or `authenticator` filter, and use `username` for a `user` filter. You may also use the `$$name$$` token and the utility will supply `alias` or `username` as appropriate based on context. The following three requests are equivalent:
+Again, remember to use `alias` in filter expressions if needed for a `connection`, `authenticator` or `action` filter, and use `username` for a `user` filter. You may also use the `$$name$$` token and the utility will supply `alias` or `username` as appropriate based on context. The following three requests are equivalent:
 
 ```
 ---
@@ -457,25 +457,25 @@ In the native Harmony API, actions are a separate resource type, linked to conne
       override: local/root/run/
   actions:
     connectTest:
-      alias: connectTest
+      action: connectTest
       commands:
       - GET -DEL *
       - LCOPY -REC %inbox% %inbox%/in
     other:
-      alias: other
+      action: other
       commands:
       - # other commands here
 ```
 
-In the embedded `actions` object, each action is represented as a sub-object whose attribute name is the same as the action's `alias` (if the attribute name and `alias` disagree, the `alias` is used). A `list` operation for any object will render any linked actions as an embedded `actions` property as illustrated above.
+In the embedded `actions` object, each action is represented as a sub-object whose attribute name is the same as the action's `action` name (if the attribute name and `action` name disagree, the `action` name is used). A `list` operation for any object will render any linked actions as an embedded `actions` property as illustrated above.
 
-On update, actions in the request are matched up against existing actions on the object by `alias`:
+On update, actions in the request are matched up against existing actions on the object by `action` name:
 
 * any request actions not appearing in the existing object are added
-* any request actions matching `alias` with existing actions are updated
-* any existing actions with no matching `alias` in the request are left unchanged
+* any request actions matching `action` name with existing actions are updated
+* any existing actions with no matching `action` name in the request are left unchanged
 
-In order to delete an existing action, create an action with the matching `alias` in the request, adding the property `operation: delete`:
+In order to delete an existing action, create an action with the matching `action` name in the request, adding the property `operation: delete`:
 
 ```
 - username: testUser
@@ -491,6 +491,8 @@ In order to delete an existing action, create an action with the matching `alias
       commands:
       - # other commands here
 ```
+
+You can also delete actions directly&mdash;see [Managing Actions](#managing-actions) below.
 
 #### Running actions
 
@@ -557,9 +559,8 @@ You can provide two additional request options to control the running of the act
 
 #### Managing actions
 
-In addition to the `run` operation, the requests described above for actions can also be used to `list`, `update` and `delete` actions directly (these operations applied to the parent object also provide a mechanism for actions to be listed, updated, and deleted in a more contrained request context).
+In addition to the `run` operation, the requests described above for actions can also be used to `add`, `list`, `update` and `delete` actions directly (these operations applied to the parent object also provide a mechanism for actions to be listed, updated, and deleted in a more constrained request context).
 
-Adding actions is only supported in the context of adding the parent object.
 
 ### [&lt;](#-action-handling-) Certificate Handling [&gt;](#-csv-files-and-templates-)
 
@@ -567,7 +568,7 @@ Like actions, certificates in the native Harmony API are handled as a separate l
 
 The batch utility will be updated to handle certificates as nested objects, but today certificates must be handled outside of the utility.
 
-## [&LessLess;](#-request-processing-) CSV Files and Templates [&GreaterGreater;] (#-formatting-results)
+## [&LessLess;](#-request-processing-) CSV Files and Templates [&GreaterGreater;](#-formatting-results)
 
 In many cases involving batch operations, most parts of each request, or at least the request skeleton, are the same.
 The detais for each request can then conveniently be represented in tabular form.
