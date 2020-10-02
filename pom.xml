@@ -5,11 +5,17 @@
 
   <groupId>com.cleo.labs.connector</groupId>
   <artifactId>connector-batchapi</artifactId>
-  <version>5.6-SNAPSHOT</version>
+  <version>0.9-RC1</version>
   <packaging>jar</packaging>
 
   <name>connector-batchapi</name>
   <url>http://maven.apache.org</url>
+
+  <scm>
+    <url>https://github.com/cleo/connector-batchapi</url>
+    <connection>scm:git:https://github.com/cleo/connector-batchapi.git</connection>
+    <developerConnection>scm:git:https://github.com/cleo/connection-batchapi.git</developerConnection>
+  </scm>
 
   <repositories>
     <repository>
@@ -50,6 +56,7 @@
     <maven.assembly.plugin.version>3.3.0</maven.assembly.plugin.version>
     <maven.shade.plugin.version>3.2.4</maven.shade.plugin.version>
     <maven.exec.plugin.version>3.0.0</maven.exec.plugin.version>
+    <github.release.plugin.version>1.1.1</github.release.plugin.version>
   </properties>
 
   <dependencies>
@@ -198,6 +205,40 @@
             </goals>
             <configuration>
               <mainClass>com.cleo.labs.connector.batchapi.processor.Main</mainClass>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>de.jutzig</groupId>
+        <artifactId>github-release-plugin</artifactId>
+        <version>${github.release.plugin.version}</version>
+        <configuration>
+          <description>First 0.9 release in Github</description>
+          <releaseName>0.9 RC1</releaseName>
+          <tag>${project.version}</tag>
+          <fileSets>
+            <fileSet>
+              <directory>${project.build.directory}</directory>
+              <includes>
+                <include>${project.artifactId}*-commandline.jar</include>
+                <include>${project.artifactId}*-distribution.zip</include>
+              </includes>
+            </fileSet>
+          </fileSets>
+        </configuration>
+        <executions>
+          <execution>
+            <id>github-upload</id>
+            <phase>deploy</phase>
+            <goals>
+              <goal>release</goal>
+            </goals>
+            <inherited>false</inherited>
+            <configuration>
+              <releaseName>${github.release}</releaseName>
+              <tag>${github.tag}</tag>
+              <overwriteArtifact>true</overwriteArtifact>
             </configuration>
           </execution>
         </executions>
