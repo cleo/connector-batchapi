@@ -544,7 +544,7 @@ public class BatchProcessor {
                 "notReadyReason",
                 "enabled=true",
                 "home.enabled=true",
-                "home.dir.default",
+                "home.dir.default=local/root/%username%",
                 "home.subfolders.default=---\n- usage: download\n  path: inbox\\\n- usage: upload\n  path: outbox\\\n",
                 "home.access=file",
                 "privileges.transfers.view=true",
@@ -1097,7 +1097,7 @@ public class BatchProcessor {
         if (password != null) {
             Json.setSubElement(officialRequest, "connect.password", password);
         }
-        ObjectNode officialResult = api.createConnection(request.entry);
+        ObjectNode officialResult = api.createConnection(officialRequest);
         if (officialResult == null) {
             throw new ProcessingException("error: connection not created");
         }
