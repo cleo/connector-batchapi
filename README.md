@@ -41,8 +41,8 @@ to all object properties or support for `list`, `delete`, `update` or to `run` a
 
 To use the Harmony Connector you must install the connector package, restart Harmony, and then configure the connector for use.
 
-1. Obtain the connector package `connector-batchapi-5.6-SNAPSHOT-distribution.zip`.
-2. Install the connector in your Harmony:<br/>&bull; `Harmonyc -i connector-batchapi-5.6-SNAPSHOT-distribution.zip`.
+1. Obtain the connector package `connector-batchapi-0.9-RC1-distribution.zip`.
+2. Install the connector in your Harmony:<br/>&bull; `Harmonyc -i connector-batchapi-0.9-RC1-distribution.zip`.
 3. Restart Harmony.
 4. Log back into the Harmony admin. From the Hosts tab add a new host:<br/>&bull; select `Connections`&rarr;`Generic`&rarr;`Generic BatchAPI`<br/>&bull; right-click `Clone and Activate`<br/>&bull; Click `Ok` and `Done`.
 5. Setup your new `BatchAPI` host:<br/>&bull; On the `BatchAPI` tab set the url (e.g. `https://localhost:6080`), User, Password and Working Directory. The Working Directory is where result files are stored, and in a clustered setup must be shared between the Harmony servers in the cluster.
@@ -53,12 +53,12 @@ To use the Harmony Connector you must install the connector package, restart Har
 
 The command line package does not require installation, but simply installation
 of the prerequisites (Java 8&mdash;openjdk8 is fine on [Windows](https://access.redhat.com/documentation/en-us/openjdk/8/html/openjdk_8_for_windows_getting_started_guide/getting_started_with_openjdk_for_windows) or [Linux](https://openjdk.java.net/install/) or [Mac OS](https://github.com/AdoptOpenJDK/homebrew-openjdk)) and the executable jar
-`connector-batchapi-5.6-SNAPSHOT-commandline.jar`.
+`connector-batchapi-0.9-RC1-commandline.jar`.
 
 If Java and the command line jar are properly installed, the following will work:
 
 ```
-$ java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar --help
+$ java -jar connector-batchapi-0.9-RC1-commandline.jar --help
 usage: com.cleo.labs.connector.batchapi.processor.Main
     --help
     --url <URL>                  VersaLex url
@@ -84,7 +84,7 @@ You can provide all the connection parameters (`url`, `username` and `password`)
 To create a profile, use:
 
 ```
-java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar --url https://192.168.7.22 -u administrator -p Admin --save
+java -jar connector-batchapi-0.9-RC1-commandline.jar --url https://192.168.7.22 -u administrator -p Admin --save
 ```
 
 This will create a default profile in `$HOME/.cic/profiles` that looks like:
@@ -106,7 +106,7 @@ When running the utility, the `default` profile will be loaded by default, unles
 To verify your profile, process a simple [test file](#getting-started-test-file) with the `-i` option:
 
 ```
-java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar -i test.yaml
+java -jar connector-batchapi-0.9-RC1-commandline.jar -i test.yaml
 ```
 
 The results will be written to the standard output.
@@ -114,13 +114,13 @@ The results will be written to the standard output.
 The special input filename `-` represents the standard input (use `-i ./-` if you really have a file named `-`). This can be used for a kind of shorthand query syntax like
 
 ```
-java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar -i - <<< '{"operation":"list","username":"bob"}'
+java -jar connector-batchapi-0.9-RC1-commandline.jar -i - <<< '{"operation":"list","username":"bob"}'
 ```
 
 or even more compactly
 
 ```
-java -jar connector-batchapi-5.6-SNAPSHOT-commandline.jar --operation list -i - <<< 'username: bob'
+java -jar connector-batchapi-0.9-RC1-commandline.jar --operation list -i - <<< 'username: bob'
 ```
 
 You may use `-i` multiple times to supply a sequence of input files to be processed. Keep in mind that while a single input file can only be in one of the six supported formats (YAML/JSON or CSV for one of the five CSV object types), you can mix and match input file formats when using multiple  `-i`.
