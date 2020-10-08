@@ -1,5 +1,7 @@
 package com.cleo.labs.connector.batchapi.processor.versalex;
 
+import java.io.File;
+
 import com.cleo.lexicom.beans.LexBean;
 //import com.cleo.lexicom.LexiCom;
 import com.cleo.lexicom.external.ILexiCom;
@@ -8,24 +10,48 @@ import com.cleo.security.encryption.ConfigEncryption;
 
 public class RealVersaLex implements VersaLex {
 
-//  private static LexiCom lexicom;
-    private static ILexiCom ilexicom;
+    private ILexiCom ilexicom;
+    private boolean vended = false;
 
-    static {
+    @Override
+    public void connect() {
         try {
-        //  lexicom = LexiCom.getCurrentInstance();
             ilexicom = LexiComFactory.getCurrentInstance();
         } catch (Exception e) {
-            e.printStackTrace();
-        //  lexicom = null;
-            ilexicom = null;
+            // try again to connect and get an instance
+            try {
+                int product = new File("Harmonyc").exists() ? LexiComFactory.HARMONY : LexiComFactory.VLTRADER;
+                ilexicom = LexiComFactory.getVersaLex(product,
+                        new File(".").getAbsolutePath(),
+                        LexiComFactory.CLIENT_ONLY);
+                vended = true;
+            } catch (Exception f) {
+                // now give up officially
+                f.printStackTrace();
+                ilexicom = null;
+            }
         }
+    }
+
+    @Override
+    public void disconnect() {
+        if (ilexicom != null && vended) {
+            try {
+                ilexicom.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            ilexicom = null;
+            vended = false;
+        }
+
     }
 
     @Override
     public String get(String host, String mailbox, String property) throws Exception {
         try {
-            return get(ILexiCom.MAILBOX, new String[] {host, mailbox}, property);
+            String result = get(ILexiCom.MAILBOX, new String[] {host, mailbox}, property);
+            return result;
         } catch (Exception e) {
             return null;
         }
@@ -45,7 +71,8 @@ public class RealVersaLex implements VersaLex {
     }
 
     private String get(int type, String[] path, String property) throws Exception {
-        return ilexicom.getProperty(type, path, property)[0];
+        String[] result = ilexicom.getProperty(type, path, property);
+        return result == null ? null : result[0];
     }
 
     @Override

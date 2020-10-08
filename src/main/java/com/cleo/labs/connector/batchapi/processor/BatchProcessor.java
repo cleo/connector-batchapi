@@ -118,6 +118,13 @@ public class BatchProcessor {
         } catch (Throwable e) {
             versalex = new StubVersaLex();
         }
+        versalex.connect();
+    }
+
+    public void close() {
+        if (versalex != null) {
+            versalex.disconnect();
+        }
     }
 
     public enum ResourceClass {

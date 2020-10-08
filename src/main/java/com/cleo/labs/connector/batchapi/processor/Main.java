@@ -333,6 +333,8 @@ public class Main {
                 processor.setOutputTemplate(Paths.get(outputTemplate));
             }
             processor.processFiles(cmd.getOptionValues("input"));
+            processor.close();
+            System.exit(0); // RMI needs a kick in the pants to actually go away
         }
     }
 

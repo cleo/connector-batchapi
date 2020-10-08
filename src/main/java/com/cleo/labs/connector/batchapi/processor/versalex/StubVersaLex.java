@@ -3,6 +3,14 @@ package com.cleo.labs.connector.batchapi.processor.versalex;
 public class StubVersaLex implements VersaLex {
 
     @Override
+    public void connect() {
+    }
+
+    @Override
+    public void disconnect() {
+    }
+
+    @Override
     public String get(String host, String mailbox, String property) throws Exception {
         return null;
     }
