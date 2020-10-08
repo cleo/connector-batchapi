@@ -325,9 +325,9 @@ public class BatchProcessor {
                 }
             }
             if (updated.size() > 0) {
-                resource.set("actions", updated);
+                resource.set(ACTIONSTOKEN, updated);
             } else {
-                resource.remove("actions");
+                resource.remove(ACTIONSTOKEN);
             }
         }
         return updated;
@@ -343,7 +343,8 @@ public class BatchProcessor {
      */
     private ObjectNode updateResource(ObjectNode original, ObjectNode updates) throws Exception {
         String type = Json.getSubElementAsText(original, "meta.resourceType", "");
-        ObjectNode updated = officialCleanup(original.deepCopy());
+        ObjectNode updated = Json.removeElements(officialCleanup(original.deepCopy()),
+                ACTIONSTOKEN);
         ObjectNode officialUpdates;
         String pwdhash = null;
         String password = null;
@@ -381,6 +382,56 @@ public class BatchProcessor {
             }
         }
         return officialResult;
+    }
+
+    /**
+     * A special variant of {@link #updateResource} that allows the {@code authenticator}
+     * to be "updated": technically this requires deleting the user from its current
+     * authenticator and then added to the new authenticator.
+     * <p/>
+     * {@code original} is still in Official form (as returned from {@link #processList})
+     * with requested updates in Batch form (taken from {@code request.entry}).
+     * @param original the Official form user to update
+     * @param updates the Batch form updates
+     * @return the updated object in Official form (next step: call {@link #createActions})
+     * @throws Exception
+     */
+    private ObjectNode moveUser(ObjectNode original, ObjectNode updates) throws Exception {
+        // set up a new add request based on the original:
+        //   convert from Official back to Batch form...
+        //   and then digest it like analyzeRequest would.
+        Request add = new Request();
+        add.operation = Operation.add;
+        add.resource = Json.getSubElementAsText(original, "username");
+        add.resourceClass = ResourceClass.user;
+        add.resourceType = "user";
+        add.entry = userOfficial2Batch(original);
+
+        // merge in the updates: note we are in Batch form
+        ObjectNode updateActions = (ObjectNode)updates.remove("actions");
+        add.entry.setAll(updates);
+        if (updateActions != null && updateActions.size() > 0) {
+            ObjectNode entryActions = (ObjectNode)add.entry.get("actions");
+            if (entryActions == null || entryActions.size() == 0) {
+                add.entry.set("actions", updateActions);
+            } else {
+                Iterator<String> fields = updateActions.fieldNames();
+                while (fields.hasNext()) {
+                    String action = fields.next();
+                    entryActions.set(action, updateActions.get(action));
+                }
+            }
+        }
+        // finally split out the actions
+        add.actions = (ObjectNode)add.entry.remove("actions");
+
+        // now delete the original
+        api.delete(original);
+        // and add the update
+        ArrayNode tempResults = Json.mapper.createArrayNode();
+        ArrayNode tempPasswords = Json.mapper.createArrayNode();
+        processAddUser(add, tempResults, tempPasswords);
+        return (ObjectNode)tempResults.get(0);
     }
 
     private static ObjectNode loadTemplate(String template) throws Exception {
@@ -1155,6 +1206,50 @@ public class BatchProcessor {
         }
     }
 
+	/*- update processors ----------------------------------------------------*/
+
+    private void processUpdate(Request request, ArrayNode results) throws Exception {
+        ArrayNode tempResults = Json.mapper.createArrayNode();
+        List<ObjectNode> toUpdate;
+        boolean movingUsers = false;
+        try {
+            toUpdate = processList(request, tempResults);
+        } catch (NotFoundException nfe) {
+            String authenticator = Json.getSubElementAsText(request.entry, "authenticator");
+            if (request.resourceClass == ResourceClass.user &&
+                !Strings.isNullOrEmpty(authenticator)) {
+                // this might be an attempt to update the authenticator
+                request.entry.remove("authenticator");
+                toUpdate = processList(request, tempResults);
+                // if still not found the NotFoundException will throw, so now we can moveUser
+                movingUsers = true;
+                request.entry.put("authenticator", authenticator);
+            } else {
+                throw nfe;
+            }
+        }
+        for (int i=0; i<toUpdate.size(); i++) {
+            try {
+                ObjectNode updated;
+                if (movingUsers) {
+                    updated = moveUser(toUpdate.get(i), request.entry);
+                } else {
+                    updated = updateResource(toUpdate.get(i), request.entry);
+                    createActions(request.actions, updated);
+                }
+                results.add(tempResults.get(i));
+                String message = String.format("%s %s updated",
+                    request.resourceClass.name(), getObjectName(updated));
+                if (toUpdate.size() > 1) {
+                    message += String.format(" (%d of %d)", i+1, toUpdate.size());
+                }
+                results.add(insertResult(official2Batch(updated), true, message));
+            } catch (Exception e) {
+                results.add(insertResult(official2Batch(toUpdate.get(i)), false, e));
+            }
+        }
+    }
+
 	/*- list processors ------------------------------------------------------*/
 
     private List<ObjectNode> processListUser(Request request, ArrayNode results) throws Exception {
@@ -1643,25 +1738,7 @@ public class BatchProcessor {
                     }
                     break;
                 case update:
-                    {
-                        ArrayNode tempResults = Json.mapper.createArrayNode();
-                        List<ObjectNode> toUpdate = processList(request, tempResults);
-                        for (int i=0; i<toUpdate.size(); i++) {
-                            try {
-                                ObjectNode updated = updateResource(toUpdate.get(i), request.entry);
-                                createActions(request.actions, updated);
-                                results.add(tempResults.get(i));
-                                String message = String.format("%s %s updated",
-                                    request.resourceClass.name(), getObjectName(updated));
-                                if (request.resourceFilter != null) {
-                                    message += String.format(" (%d of %d)", i+1, toUpdate.size());
-                                }
-                                results.add(insertResult(official2Batch(updated), true, message));
-                            } catch (Exception e) {
-                                results.add(insertResult(official2Batch(toUpdate.get(i)), false, e));
-                            }
-                        }
-                    }
+                    processUpdate(request, results);
                     break;
                 case delete:
                     {
