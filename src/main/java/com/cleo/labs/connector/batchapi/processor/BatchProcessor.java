@@ -1208,33 +1208,48 @@ public class BatchProcessor {
 
 	/*- update processors ----------------------------------------------------*/
 
+    /**
+     * Process an update request, appending to {@code results}.
+     * <p/>
+     * A typical {@code request.entry} contains some fields that are used as
+     * a query and the rest used for the update. Usually this is fine, unless
+     * you want to rename the entry (or move a user to a new authenticator,
+     * since usernames are hierarchically organized under authenticators).
+     * <p/>
+     * For renames, {@code request.entry} may contain an {@code "update"} field,
+     * whose values are overlaid on {@code request.entry} before updates are
+     * applied.
+     * <p/>
+     * Note also that special delete/add logic is required to "rename" the
+     * authenticator.
+     * @param request the request, possibly with an {@code "update"} field
+     * @param results where results are appended
+     * @throws Exception
+     */
     private void processUpdate(Request request, ArrayNode results) throws Exception {
+        // let update hold the update request (request.entry will be the query)
+        ObjectNode update = request.entry.deepCopy();
+        ObjectNode renames = (ObjectNode)update.remove("update");
+        boolean movingUsers = request.resourceClass == ResourceClass.user &&
+                renames != null &&
+                renames.has("authenticator");
+        if (renames != null) {
+            update.setAll(renames);
+        }
+
+        // run the query
         ArrayNode tempResults = Json.mapper.createArrayNode();
         List<ObjectNode> toUpdate;
-        boolean movingUsers = false;
-        try {
-            toUpdate = processList(request, tempResults);
-        } catch (NotFoundException nfe) {
-            String authenticator = Json.getSubElementAsText(request.entry, "authenticator");
-            if (request.resourceClass == ResourceClass.user &&
-                !Strings.isNullOrEmpty(authenticator)) {
-                // this might be an attempt to update the authenticator
-                request.entry.remove("authenticator");
-                toUpdate = processList(request, tempResults);
-                // if still not found the NotFoundException will throw, so now we can moveUser
-                movingUsers = true;
-                request.entry.put("authenticator", authenticator);
-            } else {
-                throw nfe;
-            }
-        }
+        toUpdate = processList(request, tempResults);
+
+        // apply the update to the query results
         for (int i=0; i<toUpdate.size(); i++) {
             try {
                 ObjectNode updated;
                 if (movingUsers) {
-                    updated = moveUser(toUpdate.get(i), request.entry);
+                    updated = moveUser(toUpdate.get(i), update);
                 } else {
-                    updated = updateResource(toUpdate.get(i), request.entry);
+                    updated = updateResource(toUpdate.get(i), update);
                     createActions(request.actions, updated);
                 }
                 results.add(tempResults.get(i));

@@ -213,6 +213,8 @@ enter aes-256-cbc decryption password:
 LJBXI_99080-orpug-12738
 ```
 
+> Note that when CSV output format is selected (see [Formatting Results](#-formatting-results)) the password is left in place in the result record in `${data.accept.password}` so that it can be mapped into the desired CSV output. The `generated passwords` result block is also omitted for CSV output. `${data.accept.password}` is still encrypted by an _export password_ as described.
+
 ## [&LessLess;](#-password-generation-) Configuration Reference [&GreaterGreater;](#-request-processing-) ##
 
 This table describes the options that control the Batch API utility, both in its command line and Harmony connector packagings. Note that the profile management options are available for the command line only&mdash;in Harmony you create separate connections of type `BatchAPI` to achive the same effect.
@@ -436,11 +438,25 @@ Note that unlike `list` operations, `update` operations on authenticators do not
 
 Bulk update requests may be applied to sets of objects using a `filter` in the request instead of naming a specific object. Any attributes provided in the request are merged/overlaid with the existing object attributes. The reported results appear in before/after pairs as described above.
 
+> An `update` operation comprises two essential parts: the fields that identify the objects to be updated, and the fields that are meant to be updated. While internally the API operates on an `id`, the batch utility performs operations based on names&mdash;`username`, `authenticator`, `connection`, or `action` (`username` or `alias` internally, or `$$name$$` in a `filter`). If an update to a name is desired&mdash;renaming an object, or "moving" a user from one authenticator to another&mdash;the new name is indicated in the request in an `update` field:
+> 
+> ```
+> ---
+> operation: update
+> username: bob
+> authenticator: Users
+> update:
+>   username: robert
+>   authenticator: NoNicknameUsers
+> ```
+> 
+> This request will rename `bob` to `robert` and move the user from `Users` to `NoNicknameUsers`, including any actions that might be attached to `bob` (internally this requires `bob` to be deleted from `Users` and `robert` to be added to `NoNicknameUsers`).
+
 #### `delete` operations
 
 Results for `delete` requests are very similar to those for `list` requests, except that the objects listed are deleted with a result message like "deleted user alice". The results can be replayed as `add` requests to restore the deleted objects.
 
-> Note that the batch utility is currently unable to list passwords, whether password hashes for users or encrypted passwords for connections, due to limitations of the underlying Harmony REST API. So while the `delete` results can be replayed as `add` requests, new passwords will have to be generated or the old passwords will need to be added from a another source.
+> Note that the command line batch utility is currently unable to list passwords, whether password hashes for users or encrypted passwords for connections, due to limitations of the underlying Harmony REST API. So while the `delete` results can be replayed as `add` requests, new passwords will have to be generated or the old passwords will need to be added from a another source. The Harmony connector version of the batch utility uses an additional API to export and import passwords.
 
 Bulk delete requests may be applied to sets of objects using a `filter` in the request instead of naming a specific object. One result it reported for each object deleted, with a result message like "deleted user alice (m of n)".
 
