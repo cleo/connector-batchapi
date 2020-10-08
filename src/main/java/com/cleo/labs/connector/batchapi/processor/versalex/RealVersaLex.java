@@ -7,6 +7,7 @@ import com.cleo.lexicom.beans.LexBean;
 import com.cleo.lexicom.external.ILexiCom;
 import com.cleo.lexicom.external.LexiComFactory;
 import com.cleo.security.encryption.ConfigEncryption;
+import com.google.gwt.thirdparty.guava.common.base.Strings;
 
 public class RealVersaLex implements VersaLex {
 
@@ -20,9 +21,13 @@ public class RealVersaLex implements VersaLex {
         } catch (Exception e) {
             // try again to connect and get an instance
             try {
-                int product = new File("Harmonyc").exists() ? LexiComFactory.HARMONY : LexiComFactory.VLTRADER;
+                String home = System.getenv("CLEOHOME");
+                if (Strings.isNullOrEmpty(home)) {
+                    home = ".";
+                }
+                int product = new File(home, "Harmonyc").exists() ? LexiComFactory.HARMONY : LexiComFactory.VLTRADER;
                 ilexicom = LexiComFactory.getVersaLex(product,
-                        new File(".").getAbsolutePath(),
+                        new File(home).getAbsolutePath(),
                         LexiComFactory.CLIENT_ONLY);
                 vended = true;
             } catch (Exception f) {

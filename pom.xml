@@ -194,22 +194,6 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>${maven.exec.plugin.version}</version>
-        <executions>
-          <execution>
-            <id>default-cli</id>
-            <goals>
-              <goal>java</goal>
-            </goals>
-            <configuration>
-              <mainClass>com.cleo.labs.connector.batchapi.processor.Main</mainClass>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
         <groupId>de.jutzig</groupId>
         <artifactId>github-release-plugin</artifactId>
         <version>${github.release.plugin.version}</version>
