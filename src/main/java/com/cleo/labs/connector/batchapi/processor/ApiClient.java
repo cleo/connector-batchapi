@@ -341,7 +341,7 @@ public class ApiClient {
     }
 
     public ObjectNode getUser(String authfilter, String username) throws Exception {
-        List<ObjectNode> users = getUsers(authfilter, "username eq \"" + username + "\"");
+        List<ObjectNode> users = getUsers(authfilter, "username eq \"" + username + "\"", true);
         if (users.size() > 0) {
             return users.get(0);
         }
@@ -349,6 +349,10 @@ public class ApiClient {
     }
 
     public List<ObjectNode> getUsers(String authfilter, String filter) throws Exception {
+        return getUsers(authfilter, filter, false);
+    }
+
+    public List<ObjectNode> getUsers(String authfilter, String filter, boolean stopAtOne) throws Exception {
         List<ObjectNode> list = new ArrayList<>();
         List<ObjectNode> authenticators = getAuthenticators(authfilter);
         for (ObjectNode authenticator : authenticators) {
@@ -357,6 +361,9 @@ public class ApiClient {
             users.forEachRemaining(list::add);
             if (users.exception() != null) {
                 throw users.exception();
+            }
+            if (stopAtOne && !list.isEmpty()) {
+                break;
             }
         }
         return list;
