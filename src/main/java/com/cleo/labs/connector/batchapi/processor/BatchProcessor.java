@@ -5,7 +5,6 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -223,35 +222,6 @@ public class BatchProcessor {
 	/*------------------------------------------------------------------------*
 	 * Password generation stuff.                                             *
 	 *------------------------------------------------------------------------*/
-
-    private static final String UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    private static final String LOWER = "abcdefghijklmnopqrstuvwxyz";
-    private static final String DIGIT = "0123456789";
-    private static final String SEPARATOR = "-=:|+_/.";
-    private static class RandomBuilder {
-        private SecureRandom random = new SecureRandom();
-        private StringBuilder s = new StringBuilder();
-        public RandomBuilder add(String set, int n) {
-            random.ints(0, set.length()).limit(n).mapToObj(set::charAt).forEach(s::append);
-            return this;
-        }
-        @Override
-        public String toString() {
-            return s.toString();
-        }
-    }
-    private static String generatePassword() {
-        // formula: 5xupper sep 5xdigit sep 5xlower sep 5xdigit
-        return new RandomBuilder()
-                .add(UPPER, 5)
-                .add(SEPARATOR, 1)
-                .add(DIGIT, 5)
-                .add(SEPARATOR, 1)
-                .add(LOWER, 5)
-                .add(SEPARATOR, 1)
-                .add(DIGIT, 5)
-                .toString();
-    }
 
     private ObjectNode generatedPassword(String authenticator, ObjectNode entry, String password) {
         //   alias: authenticator
@@ -1123,7 +1093,7 @@ public class BatchProcessor {
         String pwdhash = Json.getSubElementAsText(request.entry, "pwdhash");
         String generatedPwd = null;
         if (pwdhash != null || generatePasswords) {
-            generatedPwd = generatePassword();
+            generatedPwd = PasswordGenerator.generatePassword();
             Json.setSubElement(officialRequest, "accept.password", generatedPwd);
         }
         ObjectNode officialResult = api.createUser(officialRequest, authenticator);
