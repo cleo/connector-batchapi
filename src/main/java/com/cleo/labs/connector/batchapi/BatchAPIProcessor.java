@@ -9,11 +9,11 @@ import java.util.Map;
 
 import com.cleo.connector.api.helper.Logger;
 import com.cleo.connector.api.property.ConnectorPropertyException;
+import com.cleo.labs.connector.batchapi.processor.ApiClient;
+import com.cleo.labs.connector.batchapi.processor.ApiClientFactory;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor;
-import com.cleo.labs.connector.batchapi.processor.Json;
-import com.cleo.labs.connector.batchapi.processor.REST;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.cleo.labs.connector.batchapi.processor.Json;
 import com.google.common.base.Strings;
 import com.google.common.io.CountingOutputStream;
 
@@ -36,20 +36,50 @@ public class BatchAPIProcessor extends FilterOutputStream {
         out = output;
     }
 
+    private ApiClientFactory getApiClientFactory() {
+        return new ApiClientFactory() {
+            @Override
+            public ApiClient getApiClient(String profileName) throws Exception {
+                Profile selected = null;     // set if we gert a match by name
+                Profile firstEnabled = null; // the first enabled profile
+                Profile firstDefault = null; // the first enabled profile named "default"
+                Profile[] profiles = config.getProfiles();
+                for (Profile profile : profiles) {
+                    if (profile.enabled()) {
+                        if (firstEnabled == null) {
+                            firstEnabled = profile;
+                        }
+                        if (firstDefault == null && "default".equals(profile.getProfileName())) {
+                            firstDefault = profile;
+                        }
+                        if (Strings.nullToEmpty(profileName).equals(Strings.nullToEmpty(profile.getProfileName()))) {
+                            selected = profile;
+                            break;
+                        }
+                    }
+                }
+                if (selected == null && Strings.isNullOrEmpty(profileName)) {
+                    selected = firstDefault != null ? firstDefault : firstEnabled;
+                }
+                if (selected == null) {
+                    throw new Exception("profile "+profileName+" not found");
+                }
+                return new ApiClient(selected.url(), selected.user(), selected.password(), selected.ignoreTLSChecks());
+            }
+        };
+    }
+
     private void process(Path result) throws IOException {
-        ArrayNode report;
-        REST restClient = null;
+        ApiClientFactory factory = null;
         try {
-            restClient = new REST(config.getURL(), config.getUser(), config.getPassword(), config.getIgnoreTLSChecks());
-        } catch (Exception e) {
-            logger.debug("could not create REST client", e);
-            report = Json.mapper.createArrayNode();
-            report.add(BatchProcessor.insertResult(Json.setSubElement(null, "result.file", path.getFileName().toString()), false, e));
-            Json.mapper.writeValue(result.toFile(), report);
-            return;
+            if (config.getDefaultOperation() != Operation.preview) {
+                factory = getApiClientFactory();
+            }
+        } catch (ConnectorPropertyException e) {
+            factory = getApiClientFactory(); // I guess the default is something other than preview?
         }
 
-        BatchProcessor processor = new BatchProcessor(restClient);
+        BatchProcessor processor = new BatchProcessor(factory);
         try {
             processor.setGeneratePasswords(config.getGeneratePasswords());
             if (!Strings.isNullOrEmpty(config.getExportPassword())) {

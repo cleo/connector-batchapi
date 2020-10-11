@@ -237,14 +237,16 @@ public class TemplateExpander {
         values.add(id);
         if (matcher.group(1) != null) {
             // column mode
-            Pattern pattern = Pattern.compile(expr);
-            for (String column : engine.data().keySet()) {
-                Matcher m = pattern.matcher(column);
-                if (m.matches()) {
-                    if (m.groupCount() > 0) {
-                        values.add(m.group(1));
-                    } else {
-                        values.add(column);
+            if (engine.data() != null) {
+                Pattern pattern = Pattern.compile(expr);
+                for (String column : engine.data().keySet()) {
+                    Matcher m = pattern.matcher(column);
+                    if (m.matches()) {
+                        if (m.groupCount() > 0) {
+                            values.add(m.group(1));
+                        } else {
+                            values.add(column);
+                        }
                     }
                 }
             }

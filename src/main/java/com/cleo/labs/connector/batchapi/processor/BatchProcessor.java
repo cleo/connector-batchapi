@@ -51,7 +51,8 @@ public class BatchProcessor {
 
     public enum OutputFormat {yaml, json, csv};
 
-    private REST api;
+    private ApiClientFactory factory;
+    private ApiClient api;
     private String exportPassword;
     private Operation defaultOperation;
     private String template;
@@ -115,10 +116,11 @@ public class BatchProcessor {
             Class<?> clazz = Class.forName("com.cleo.labs.connector.batchapi.processor.versalex.RealVersaLex");
             Object object = clazz.newInstance();
             versalex = VersaLex.class.cast(object);
+            versalex.connect();
         } catch (Throwable e) {
             versalex = new StubVersaLex();
+            versalex.connect();
         }
-        versalex.connect();
     }
 
     public void close() {
@@ -153,6 +155,14 @@ public class BatchProcessor {
             .map(ActionType::name)
             .collect(Collectors.toSet());
 
+    private Map<String,ApiClient> apiClientCache = new HashMap<>();
+    private void setApi(String profileName) throws Exception {
+        api = apiClientCache.get(profileName);
+        if (api == null) {
+            api = factory.getApiClient(profileName);
+            apiClientCache.put(profileName, api);
+        }
+    }
 	/*------------------------------------------------------------------------*
 	 * For bulk user endpoints we want to avoid looking up authenticators for *
 	 * the users, so we maintain a cache (by authenticator alias/name and     *
@@ -959,7 +969,7 @@ public class BatchProcessor {
             if (includeUsers) {
                 List<ObjectNode> userlist = new ArrayList<>();
                 String userlink = Json.getSubElementAsText(authenticator, "_links.users.href");
-                REST.JsonCollection users = api.new JsonCollection(userlink);
+                ApiClient.JsonCollection users = api.new JsonCollection(userlink);
                 while (users.hasNext()) {
                     ObjectNode user = users.next();
                     if (request.operation != Operation.add) {
@@ -1452,13 +1462,21 @@ public class BatchProcessor {
         request.entry = (ObjectNode)(original.deepCopy());
 
         // figure out the requested operation
-        request.operation = request.entry.has("operation")
-                ? Operation.valueOf(Json.asText(request.entry.remove("operation")))
-                : defaultOperation;
+        request.operation = defaultOperation == Operation.preview
+                ? Operation.preview
+                : request.entry.has("operation")
+                    ? Operation.valueOf(Json.asText(request.entry.remove("operation")))
+                    : defaultOperation;
         boolean existing = request.operation != Operation.add;
 
+        // set up the api client to use for this request (unless preview)
+        if (request.operation != Operation.preview) {
+            setApi(Json.asText(request.entry.remove("profile")));
+        }
+        
         // collect actions into an ObjectNode
         request.actions = normalizeActions(request.entry.remove("actions"));
+
         // remove other stuff that might be from a reflected result
         request.entry.remove("result");
         request.entry.remove("id");
@@ -1845,8 +1863,8 @@ public class BatchProcessor {
      * use set methods to set options.
      * @param api the REST api connection to use
      */
-    public BatchProcessor(REST api) {
-        this.api = api;
+    public BatchProcessor(ApiClientFactory factory) {
+        this.factory = factory;
         this.exportPassword = null;
         this.defaultOperation = Operation.add;
         this.template = null;

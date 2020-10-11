@@ -279,6 +279,27 @@ public class Main {
         return profile;
     }
 
+    public static ApiClientFactory getApiClientFactory(CommandLine cmd) throws Exception {
+        Profile defaultProfile = processProfileOptions(cmd);
+        return new ApiClientFactory() {
+            @Override
+            public ApiClient getApiClient(String profileName) throws Exception {
+                Profile profile;
+                if (Strings.isNullOrEmpty(profileName)) {
+                    profile = defaultProfile;
+                } else {
+                    profile = loadProfile(profileName, true);
+                }
+                if (profile == null) {
+                    throw new Exception("profile not found: "+profileName);
+                }
+                return new ApiClient(profile.getUrl(), profile.getUsername(), profile.getPassword(), profile.isInsecure())
+                    .includeDefaults(cmd.hasOption("include-defaults"))
+                    .traceRequests(cmd.hasOption("trace-requests"));
+            }
+        };
+    }
+
     public static void main(String[] args) throws IOException {
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -309,18 +330,16 @@ public class Main {
         }
 
         if (cmd.hasOption("input")) {
-            REST restClient = null;
+            ApiClientFactory factory = null;
             if (operation != Operation.preview) {
                 try {
-                    restClient = new REST(profile.getUrl(), profile.getUsername(), profile.getPassword(), profile.isInsecure());
-                    restClient.includeDefaults(cmd.hasOption("include-defaults"));
-                    restClient.traceRequests(cmd.hasOption("trace-requests"));
+                    factory = getApiClientFactory(cmd);
                 } catch (Exception e) {
                     System.err.println("Failed to create REST Client: " + e.getMessage());
                     System.exit(-1);
                 }
             }
-            BatchProcessor processor = new BatchProcessor(restClient)
+            BatchProcessor processor = new BatchProcessor(factory)
                 .setGeneratePasswords(cmd.hasOption("generate-pass"))
                 .setExportPassword(profile.getExportPassword())
                 .setDefaultOperation(operation)

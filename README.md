@@ -45,7 +45,7 @@ To use the Harmony Connector you must install the connector package, restart Har
 2. Install the connector in your Harmony:<br/>&bull; `Harmonyc -i connector-batchapi-0.9-RC1-distribution.zip`.
 3. Restart Harmony.
 4. Log back into the Harmony admin. From the Hosts tab add a new host:<br/>&bull; select `Connections`&rarr;`Generic`&rarr;`Generic BatchAPI`<br/>&bull; right-click `Clone and Activate`<br/>&bull; Click `Ok` and `Done`.
-5. Setup your new `BatchAPI` host:<br/>&bull; On the `BatchAPI` tab set the url (e.g. `https://localhost:6080`), User, Password and Working Directory. The Working Directory is where result files are stored, and in a clustered setup must be shared between the Harmony servers in the cluster.
+5. Setup your new `BatchAPI` host:<br/>&bull; On the `BatchAPI` tab set the Working Directory and create a profile in the Profiles table with a Url (e.g. `https://localhost:6080`), User and Password. The Working Directory is where result files are stored, and in a clustered setup must be shared between the Harmony servers in the cluster.
 6. Test your new connection:<br/>&bull; In the `send` action use the single command `PUT test.yaml`<br/>&bull; create a request file `test.yaml` as shown [below](#getting-started-test-file) in your outbox directory.<br/>&bull; Run the action. You should see a `test.results.yaml` file in your working directory.
 
 
@@ -221,16 +221,16 @@ This table describes the options that control the Batch API utility, both in its
 
 Command Line                    | Connector         | Description
 --------------------------------|-------------------|------------
---url <URL>                     | Url               | The Harmony URL, e.g. `https://localhost:6080`
--u, --username &lt;USERNAME&gt; | User              | The user authorized to use the Harmony API
--p, --password &lt;PASSWORD&gt; | Password          | The user's password
+--url <URL>                     | Profile&rarr;Url  | The Harmony URL, e.g. `https://localhost:6080`
+-u, --username &lt;USERNAME&gt; | Profile&rarr;User | The user authorized to use the Harmony API
+-p, --password &lt;PASSWORD&gt; | Profile&rarr;Password| The user's password
+-k, --insecure                  | Profile&rarr;Ignore TLS Checks | Select to bypass TLS hostname and trusted issuer checks
 -i, --input &lt;FILE&gt;        | `PUT` file        | input file YAML, JSON or CSV
 --generate-pass                 | Generate Password | Select to enable password generation for created users
 --export-pass &lt;PASSWORD&gt;  | Export Password   | Password used to encrypt generated passwords in the results file
 --operation &lt;OPERATION&gt;   | Default Operation | The default operation for entries lacking an explicit "operation"
 --output-format &lt;FORMAT&gt;  | Output Format     | Output format: yaml (default), json, or csv
 --output-template&nbsp;&lt;TEMPLATE&gt; | Output Template | Template for formatting csv output (required with csv)
--k, --insecure                  | Ignore TLS Checks | Select to bypass TLS hostname and trusted issuer checks
 --profile &lt;PROFILE&gt;       | &nbsp;            | The named profile to load instead of "default"
 --include-defaults              | &nbsp;            | Include all default values when listing connections
 --template &lt;TEMPLATE&gt;     | &nbsp;            | load CSV file using provided template
@@ -238,7 +238,7 @@ Command Line                    | Connector         | Description
 --remove                        | &nbsp;            | Select to remove named profile (or "default")
 
 
-## [&LessLess;](#-configuration-reference-) Request Processing [&GreaterGreater;](#-csv-files-and-templates-) ##
+## [&LessLess;](#-configuration-reference-) Request Processing [&GreaterGreater;](#-multiple-profiles-) ##
 
 ### Requests [&gt;](#-results-)
 
@@ -578,13 +578,39 @@ You can provide two additional request options to control the running of the act
 In addition to the `run` operation, the requests described above for actions can also be used to `add`, `list`, `update` and `delete` actions directly (these operations applied to the parent object also provide a mechanism for actions to be listed, updated, and deleted in a more constrained request context).
 
 
-### [&lt;](#-action-handling-) Certificate Handling [&gt;](#-csv-files-and-templates-)
+### [&lt;](#-action-handling-) Certificate Handling [&gt;](#-multiple-profiles-)
 
 Like actions, certificates in the native Harmony API are handled as a separate linked resource.
 
 The batch utility will be updated to handle certificates as nested objects, but today certificates must be handled outside of the utility.
 
-## [&LessLess;](#-request-processing-) CSV Files and Templates [&GreaterGreater;](#-formatting-results)
+## [&LessLess;](#-request-processing-) Multiple Profiles [&GreaterGreater;](#-csv-files-and-templates-)
+
+In the typical mode of operation, all requests are sent to a single Harmony (or VLTrader) server, identified by the selected connection profile (`--profile` or `default` for command line, or the first enabled entry in the Profiles table for the connector). But when needed, each request can be routed to a different Harmony/VLTrader server by including a `profile` name in each request.
+
+### Command Line
+
+If a profile name is provided in a request, it is matched against a profile of the same name stored in `$HOME/.cic/profiles`.
+
+If a profile name is not provided in a request, the default profile for the command line is used. This is:
+
+* the unnamed profile comprised of explicit command line arguments `--url`, `--username`, `--password`, and `--insecure`, if supplied, otherwise
+* the profile named in the `--profile` command line option, otherwise
+* the profile named `default` in `$HOME/.cic/profiles`.
+
+### Harmony Connector
+
+If a profile is provided in a request, it is matched against an _enabled_ profile of the same name in the `Profiles` table configured for the connector. Since the Harmony UI does not prevent multiple profiles of the same name being entered and enabled, the first matching profile is used.
+
+If a profile is not provided in a request, a default profile from the `Profiles` table configured for the connector is selected as follows:
+
+* the first enabled profile with a blank name, if one exists, otherwise
+* the first enabled profile named `default`, if one exists, otherwise
+* the first enabled profile
+
+If a named or default profile cannot be found, the request fails with an error.
+
+## [&LessLess;](#-multiple-profiles-) CSV Files and Templates [&GreaterGreater;](#-formatting-results)
 
 In many cases involving batch operations, most parts of each request, or at least the request skeleton, are the same.
 The detais for each request can then conveniently be represented in tabular form.

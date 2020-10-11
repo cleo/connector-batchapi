@@ -1,7 +1,6 @@
 package com.cleo.labs.connector.batchapi;
 
 import static com.cleo.connector.api.property.CommonPropertyGroups.Connect;
-import static com.cleo.connector.api.property.CommonPropertyGroups.ConnectSecurity;
 
 import java.io.IOException;
 
@@ -35,26 +34,11 @@ public class BatchAPIConnectorSchema extends ConnectorConfig {
             .build();
 
     @Property
-    final IConnectorProperty<String> url = new PropertyBuilder<>("Url", "")
+    final public IConnectorProperty<String> profiles = new PropertyBuilder<>("Profiles", "")
             .setRequired(true)
-            .setDescription("The Harmony server URL including protocol, "+
-                            "host and port, e.g. \"https://harmony.example.com:6080\".")
-            .setGroup(Connect)
-            .build();
-
-    @Property
-    final IConnectorProperty<String> user = new PropertyBuilder<>("User", "")
-            .setRequired(true)
-            .setDescription("The Harmony API user.")
-            .setGroup(Connect)
-            .build();
-
-    @Property
-    final IConnectorProperty<String> password = new PropertyBuilder<>("Password", "")
-            .setRequired(true)
-            .setDescription("The Harmony API password.")
-            .addAttribute(IConnectorProperty.Attribute.Password)
-            .setGroup(Connect)
+            .setAllowedInSetCommand(false)
+            .setDescription("The API connection profiles.")
+            .setExtendedClass(ProfileTableProperty.class)
             .build();
 
     @Property
@@ -114,12 +98,6 @@ public class BatchAPIConnectorSchema extends ConnectorConfig {
             .setGroup(Connect)
             .setExtendedClass(ConfigFileImport.class)
             .setRequired(false)
-            .build();
-
-    @Property
-    final IConnectorProperty<Boolean> ignoreTLSChecks = new PropertyBuilder<>("IgnoreTLSChecks", false)
-            .setDescription("Select to ignore TLS checks on trusted certificates and hostname matching.")
-            .setGroup(ConnectSecurity)
             .build();
 
     @Property

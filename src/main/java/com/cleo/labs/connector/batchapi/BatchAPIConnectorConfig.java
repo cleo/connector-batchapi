@@ -23,16 +23,9 @@ public class BatchAPIConnectorConfig {
         return Paths.get(schema.workingDirectory.getValue(client));
     }
 
-    public String getURL() throws ConnectorPropertyException {
-        return schema.url.getValue(client);
-    }
-
-    public String getUser() throws ConnectorPropertyException {
-        return schema.user.getValue(client);
-    }
-
-    public String getPassword() throws ConnectorPropertyException {
-        return schema.password.getValue(client);
+    public Profile[] getProfiles() throws ConnectorPropertyException {
+        String value = schema.profiles.getValue(client);
+        return ProfileTableProperty.toProfiles(value);
     }
 
     public boolean getGeneratePasswords() throws ConnectorPropertyException {
@@ -65,10 +58,6 @@ public class BatchAPIConnectorConfig {
 
     public String getOutputTemplate() throws ConnectorPropertyException {
         return ConfigFileImport.value(schema.outputTemplate.getValue(client));
-    }
-
-    public boolean getIgnoreTLSChecks() throws ConnectorPropertyException {
-        return schema.ignoreTLSChecks.getValue(client);
     }
 
     public boolean getEnableDebug() throws ConnectorPropertyException {

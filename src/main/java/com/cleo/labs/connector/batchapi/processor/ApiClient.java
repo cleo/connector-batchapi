@@ -36,7 +36,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.Strings;
 
-public class REST {
+public class ApiClient {
 
     public static String API_BASE = "/api";
     public static String AUTHENTICATION_URL = API_BASE+"/authentication";
@@ -52,7 +52,7 @@ public class REST {
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 
-    public REST(String url, String username, String password, boolean insecure) throws Exception {
+    public ApiClient(String url, String username, String password, boolean insecure) throws Exception {
         this.baseUrl = url;
         this.insecure = insecure;
         this.authToken = authorize(username, password);
@@ -60,12 +60,12 @@ public class REST {
         this.traceRequests = false;
     }
 
-    public REST includeDefaults(boolean includeDefaults) {
+    public ApiClient includeDefaults(boolean includeDefaults) {
         this.includeDefaults = includeDefaults;
         return this;
     }
 
-    public REST traceRequests(boolean traceRequests) {
+    public ApiClient traceRequests(boolean traceRequests) {
         this.traceRequests = traceRequests;
         return this;
     }

@@ -2,9 +2,9 @@ package com.cleo.labs.connector.batchapi.processor;
 
 public class Profile {
     private String url = null;
-    private boolean insecure = false;
     private String username = null;
     private String password = null;
+    private boolean insecure = false;
     private String exportPassword = null;
 
     public String getUrl() {
@@ -12,13 +12,6 @@ public class Profile {
     }
     public Profile setUrl(String url) {
         this.url = url;
-        return this;
-    }
-    public boolean isInsecure() {
-        return insecure;
-    }
-    public Profile setInsecure(boolean insecure) {
-        this.insecure = insecure;
         return this;
     }
     public String getUsername() {
@@ -33,6 +26,13 @@ public class Profile {
     }
     public Profile setPassword(String password) {
         this.password = password;
+        return this;
+    }
+    public boolean isInsecure() {
+        return insecure;
+    }
+    public Profile setInsecure(boolean insecure) {
+        this.insecure = insecure;
         return this;
     }
     public String getExportPassword() {
