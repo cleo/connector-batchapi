@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -1639,45 +1640,48 @@ public class BatchProcessor {
 
     private ArrayNode prepareContent(String content) throws Exception {
         // load file content into a string
-        ArrayNode file = null;
+        TemplateExpander expander = new TemplateExpander();
+        boolean csvMode = false;
 
+        // Option 1: try to load it as a JSON or YAML file (unless --template)
         if (Strings.isNullOrEmpty(template)) {
-            // Option 1: try to load it as a JSON or YAML file
             try {
                 JsonNode json = Json.mapper.readTree(content);
-                // file is a list of entries to process:
-                //   convert a single entry file into a list of one
-                if (!json.isArray()) {
-                    file = Json.mapper.createArrayNode();
-                    file.add(json);
-                } else {
-                    file = (ArrayNode)json;
-                    json = file.get(0);
-                }
-                // now file is an array and json is the first element: test it
-                if (json.isObject()) {
-                    return file;
+                if (json.isContainerNode()) {
+                    // treat a Json input as "template" processing one empty line of input
+                    expander.template(json);
+                    expander.line(Collections.emptyMap());
                 }
             } catch (Exception notjson) {
                 // try something else
             }
-            file = null;
         }
 
         // Option 2: see if it can be loaded as CSV
+        if (expander.data()==null) {
+            // Json didn't load (or not attempted due to --template)
+            try {
+                expander.loadCsv(content);
+                loadTemplate(expander);
+                csvMode = true;
+            } catch (Exception e) {
+                throw new ProcessingException(e.getMessage());
+            }
+        }
+
+        // ok, something worked -- run the template
+        ArrayNode file = Json.mapper.createArrayNode();
         try {
-            TemplateExpander expander = new TemplateExpander();
-            expander.loadCsv(content);
-            loadTemplate(expander);
-            file = Json.mapper.createArrayNode();
             for (TemplateExpander.ExpanderResult result : expander.expand()) {
                 if (!result.success()) {
                     ObjectNode errorNode = Json.mapper.createObjectNode();
                     ObjectNode resultNode = errorNode.putObject("result");
-                    ObjectNode csvNode = resultNode.putObject("csv");
-                    csvNode.put("error", result.exception().getMessage());
-                    csvNode.put("line", result.lineNumber());
-                    csvNode.set("data", Json.mapper.valueToTree(result.line()));
+                    if (csvMode) {
+                        ObjectNode csvNode = resultNode.putObject("csv");
+                        csvNode.put("error", result.exception().getMessage());
+                        csvNode.put("line", result.lineNumber());
+                        csvNode.set("data", Json.mapper.valueToTree(result.line()));
+                    }
                     file.add(errorNode);
                 } else if (result.expanded().isArray()) {
                     file.addAll((ArrayNode)result.expanded());
