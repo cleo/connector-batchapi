@@ -29,7 +29,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
 import com.google.common.io.ByteStreams;
-import com.google.common.io.Resources;
 
 public class BatchProcessor {
     public enum Operation {
@@ -163,6 +162,7 @@ public class BatchProcessor {
             apiClientCache.put(profileName, api);
         }
     }
+
 	/*------------------------------------------------------------------------*
 	 * For bulk user endpoints we want to avoid looking up authenticators for *
 	 * the users, so we maintain a cache (by authenticator alias/name and     *
@@ -198,43 +198,6 @@ public class BatchProcessor {
             }
         }
         return authenticator;
-    }
-
-    /**
-     * When a user is created with a named authenticator that doesn't exist,
-     * the authenticator is created from a default template.
-     * @param alias the authenticator alias
-     * @return
-     * @throws Exception
-     */
-    private ObjectNode createAuthenticatorFromTemplate(String alias) throws Exception {
-        ObjectNode authTemplate = loadTemplate("template_authenticator.yaml");
-        authTemplate.put("alias", alias);
-        ObjectNode authenticator = api.createAuthenticator(authTemplate);
-        if (authenticator == null) {
-            throw new ProcessingException("authenticator not created");
-        }
-        authenticatorNameCache.put(alias, authenticator);
-        authenticatorLinkCache.put(Json.getHref(authenticator), authenticator);
-        return authenticator;
-    }
-
-	/*------------------------------------------------------------------------*
-	 * Password generation stuff.                                             *
-	 *------------------------------------------------------------------------*/
-
-    private ObjectNode addedPassword(String authenticator, ObjectNode entry, String password) {
-        //   alias: authenticator
-        //   username: username
-        //   email: email
-        //   password: encrypted password
-        String encrypted = OpenSSLCrypt.encrypt(exportPassword, password);
-        ObjectNode result = Json.mapper.createObjectNode();
-        result.put("authenticator", authenticator);
-        result.put("username", entry.get("username").asText());
-        result.put("email", entry.get("email").asText());
-        result.put("password", encrypted);
-        return result;
     }
 
     /**
@@ -413,10 +376,6 @@ public class BatchProcessor {
         ArrayNode tempPasswords = Json.mapper.createArrayNode();
         processAddUser(add, tempResults, tempPasswords);
         return (ObjectNode)tempResults.get(0);
-    }
-
-    private static ObjectNode loadTemplate(String template) throws Exception {
-        return (ObjectNode) Json.mapper.readTree(Resources.toString(Resources.getResource(template), Charsets.UTF_8));
     }
 
     private String getObjectName(ObjectNode object) {
@@ -1058,6 +1017,20 @@ public class BatchProcessor {
         return update;
     }
 
+    private ObjectNode addedPassword(String authenticator, ObjectNode entry, String password) {
+        //   alias: authenticator
+        //   username: username
+        //   email: email
+        //   password: encrypted password
+        String encrypted = OpenSSLCrypt.encrypt(exportPassword, password);
+        ObjectNode result = Json.mapper.createObjectNode();
+        result.put("authenticator", authenticator);
+        result.put("username", entry.get("username").asText());
+        result.put("email", entry.get("email").asText());
+        result.put("password", encrypted);
+        return result;
+    }
+
     private ObjectNode passwordReport(ArrayNode passwords) {
         // create an object like:
         //   result:
@@ -1083,10 +1056,13 @@ public class BatchProcessor {
         }
         ObjectNode authenticator = getAuthenticatorByName(alias);
         if (authenticator == null) {
+            throw new ProcessingException("authenticator \""+alias+"\" not found");
+            /*
             authenticator = createAuthenticatorFromTemplate(alias);
             results.add(insertResult(authenticatorOfficial2Batch(authenticator),
                     true,
                     String.format("created authenticator %s with default template", alias)));
+            */
         }
         // Create user
         ObjectNode officialRequest = userBatch2Official(request.entry);
@@ -1625,7 +1601,7 @@ public class BatchProcessor {
                     }
                     break;
                 case "authenticator":
-                    found = api.getAuthenticator(name) != null;
+                    found = getAuthenticatorByName(name) != null;
                     break;
                 case "connection":
                     found = api.getConnection(name) != null;

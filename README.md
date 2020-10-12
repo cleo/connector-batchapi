@@ -171,7 +171,7 @@ The batch API utility includes an option for generating random passwords instead
 
 An example generated password might be `FEWSH_77121|denco+13057`. This format ensures that most length and complexity requirements can be met, while also providing over 89 bits of entropy.
 
-Passwords are not included in the result record for generated users. Instead, an additional result block is appended to the results file:
+Passwords are included in the result record for added users. Additionally a result block summarizing added users and their passwords is appended to the results file:
 
 ```
 - result:
@@ -213,7 +213,7 @@ enter aes-256-cbc decryption password:
 LJBXI_99080-orpug-12738
 ```
 
-> Note that when CSV output format is selected (see [Formatting Results](#-formatting-results)) the password is left in place in the result record in `${data.accept.password}` so that it can be mapped into the desired CSV output. The `generated passwords` result block is also omitted for CSV output. `${data.accept.password}` is still encrypted by an _export password_ as described.
+> Note that when CSV output format is selected (see [Formatting Results](#-formatting-results)) the password in the result record in `${data.accept.password}` can be mapped into the desired CSV output. The `generated passwords` result block is omitted for CSV output. `${data.accept.password}` is still encrypted by an _export password_ as described.
 
 ## [&LessLess;](#-password-generation-) Configuration Reference [&GreaterGreater;](#-request-processing-) ##
 
@@ -282,8 +282,9 @@ add       | Create a new object       | &nbsp;           | &check;
 update    | Update an existing object | &check;          | &check;
 delete    | Delete existing object(s) | &check;          | &nbsp;
 run       | Run existing action(s)    | &check;          | &nbsp;
+preview   | Template preview          | &ctdot;          | &ctdot;
 
-The default operation is `add`, unless this is overridden with the `--operation <OPERATION>` argument for the command line utility. In any case, if an operation is specified in a request it is honored over the default.
+The default operation is `add`, unless this is overridden with the `--operation <OPERATION>` argument for the command line utility. In any case, if an operation other than `preview` is specified in a request it is honored over the default (see [Testing your template](#testing-your-template)).
 
 The `list`, `update`, `delete` and `run` operations may be applied to sets of objects identified by a [filter](https://developer.cleo.com/api/getting-started/overview.html#filter).
 
@@ -676,7 +677,7 @@ If you provide a CSV file for `--input` and do not provide an explicit `--templa
 
 The built-in templates support the following header columns. You may include them in your CSV file in any order, but keep in mind that the `UserAlias` and `type` columns are essential to the template selection process:
 
-authenticator   | user              | as2               | sftp              | ftp
+[authenticator](https://github.com/cleo/connector-batchapi/blob/master/src/main/resources/com/cleo/labs/connector/batchapi/processor/template/default/authenticator.yaml) | [user](https://github.com/cleo/connector-batchapi/blob/master/src/main/resources/com/cleo/labs/connector/batchapi/processor/template/default/user.yaml) | [as2](https://github.com/cleo/connector-batchapi/blob/master/src/main/resources/com/cleo/labs/connector/batchapi/processor/template/default/as2.yaml) | [sftp](https://github.com/cleo/connector-batchapi/blob/master/src/main/resources/com/cleo/labs/connector/batchapi/processor/template/default/sftp.yaml) | [ftp](https://github.com/cleo/connector-batchapi/blob/master/src/main/resources/com/cleo/labs/connector/batchapi/processor/template/default/ftp.yaml)
 ----------------|-------------------|-------------------|-------------------|----
 &nbsp;          | &nbsp;            | type              | type              | type
 UserAlias       | Host              | alias             | alias             | alias
@@ -716,7 +717,7 @@ A few columns can be multi-valued:
 
 As a convenience action&lowbar;<i>alias</i>&lowbar;schedule and other action schedule columns accept the shorthand `polling` for the official API schedule `on file continuously`.
 
-Built-in templates can be used for only a single object type per file and a single request per row. You can construct your own templates that can use conditionals and token expressions to create multiple object types from a single CSV, or can create multiple requests per row.
+Built-in templates can be used for only a single object type per file and a single request per row (although the user template will also automatically create the authenticator indicated in the `Host` column if it does not yet exist&mdash;see [the template](https://github.com/cleo/connector-batchapi/blob/master/src/main/resources/com/cleo/labs/connector/batchapi/processor/template/default/user.yaml)). You can construct your own templates that can use conditionals and token expressions to create multiple object types from a single CSV, or can create multiple requests per row.
 
 ### [&lt;](built-in-templates-) Advanced template features [&gt;](-formatting-results)
 
