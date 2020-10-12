@@ -317,7 +317,6 @@ public class MacroEngine {
         try {
             return engine.eval(expr);
         } catch (ScriptException e) {
-e.printStackTrace();
             if (e.getMessage().startsWith("ReferenceError:") ||
                     e.getMessage().startsWith("TypeError:")) {
                 return null;

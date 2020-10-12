@@ -223,7 +223,7 @@ public class BatchProcessor {
 	 * Password generation stuff.                                             *
 	 *------------------------------------------------------------------------*/
 
-    private ObjectNode generatedPassword(String authenticator, ObjectNode entry, String password) {
+    private ObjectNode addedPassword(String authenticator, ObjectNode entry, String password) {
         //   alias: authenticator
         //   username: username
         //   email: email
@@ -1062,13 +1062,13 @@ public class BatchProcessor {
         // create an object like:
         //   result:
         //     status: success
-        //     message: generated passwords
+        //     message: added passwords
         //     passwords:
         //     - alias: authenticator
         //       username: username
         //       email: email
         //       password: encrypted password
-        ObjectNode report = insertResult(Json.mapper.createObjectNode(), true, "generated passwords");
+        ObjectNode report = insertResult(Json.mapper.createObjectNode(), true, "added passwords");
         Json.setSubElement(report, "result.passwords", passwords);
         return report;
     }
@@ -1091,10 +1091,12 @@ public class BatchProcessor {
         // Create user
         ObjectNode officialRequest = userBatch2Official(request.entry);
         String pwdhash = Json.getSubElementAsText(request.entry, "pwdhash");
-        String generatedPwd = null;
+        String password = null;
         if (pwdhash != null || generatePasswords) {
-            generatedPwd = PasswordGenerator.generatePassword();
-            Json.setSubElement(officialRequest, "accept.password", generatedPwd);
+            password = PasswordGenerator.generatePassword();
+            Json.setSubElement(officialRequest, "accept.password", password);
+        } else {
+            password = Json.getSubElementAsText(officialRequest, "accept.password");
         }
         ObjectNode officialResult = api.createUser(officialRequest, authenticator);
         if (officialResult == null) {
@@ -1103,12 +1105,11 @@ public class BatchProcessor {
         if (pwdhash != null) {
             versalex.set(alias, request.resource, "Pwdhash", pwdhash);
             officialResult.put("pwdhash", pwdhash);
-        } else if (generatePasswords) {
-            if (outputFormat == OutputFormat.csv) {
-                Json.setSubElement(officialResult, "accept.password", generatedPwd);
-            } else {
-                passwords.add(generatedPassword(alias, request.entry, generatedPwd));
-            }
+            password = null;
+        }
+        if (password != null) {
+            Json.setSubElement(officialResult, "accept.password", password);
+            passwords.add(addedPassword(alias, request.entry, password));
         }
         if (request.actions != null) {
             createActions(request.actions, officialResult);
