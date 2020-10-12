@@ -663,7 +663,7 @@ resulting in the same effect as the following explicit YAML request file:
 
 If your column headings are not legal JavaScript identifiers see [below](#token-replacement).
 
-### Built-in templates
+### Built-in templates [&gt;](#-advanced-template-features-)
 
 If you provide a CSV file for `--input` and do not provide an explicit `--template`, the batch utility will attempt to use one of its built-in templates based on an analysis of the content:
 
@@ -718,7 +718,7 @@ As a convenience action&lowbar;<i>alias</i>&lowbar;schedule and other action sch
 
 Built-in templates can be used for only a single object type per file and a single request per row. You can construct your own templates that can use conditionals and token expressions to create multiple object types from a single CSV, or can create multiple requests per row.
 
-### Advanced template features
+### [&lt;](built-in-templates-) Advanced template features [&gt;](-formatting-results)
 
 #### JSON and YAML
 
@@ -910,6 +910,50 @@ type: nativeUser
 ```
 
 the `usage: download` field will prevent the entry in the `default:` array from being pruned, which will then prevent the entire `default:` array and possibly the `subfolders:` field from being pruned. So the `${if:DownloadFolder}:` conditional is needed to force the needed pruning.
+
+#### Built-in Functions
+
+In addition to the standard JavaScript environment, the following functions and variables are built-in to the template expansion facility:
+
+##### `date(format)`
+
+Expands to a timestamp of the current time (as of when template processing started&mdash;all `date` functions in a template will expand using exactly the same time instanc) using a Java [SimpleDateFormat](https://docs.oracle.com/javase/8/docs/api/java/text/SimpleDateFormat.html). Examples from the Java documentation:
+
+> The following examples show how date and time patterns are interpreted in the U.S. locale. The given date and time are 2001-07-04 12:08:56 local time in the U.S. Pacific Time time zone.
+> 
+> Date and Time Pattern          | Result
+> -------------------------------|-------
+> "yyyy.MM.dd G 'at' HH:mm:ss z" | 2001.07.04 AD at 12:08:56 PDT
+> "EEE, MMM d, ''yy"             | Wed, Jul 4, '01
+> "h:mm a"                       | 12:08 PM
+> "hh 'o''clock' a, zzzz"        | 12 o'clock PM, Pacific Daylight Time
+> "K:mm a, z"                    | 0:08 PM, PDT
+> "yyyyy.MMMMM.dd GGG hh:mm aaa" | 02001.July.04 AD 12:08 PM
+> "EEE, d MMM yyyy HH:mm:ss Z"   | Wed, 4 Jul 2001 12:08:56 -0700
+> "yyMMddHHmmssZ"                | 010704120856-0700
+> "yyyy-MM-dd'T'HH:mm:ss.SSSZ"   | 2001-07-04T12:08:56.235-0700
+> "yyyy-MM-dd'T'HH:mm:ss.SSSXXX" | 2001-07-04T12:08:56.235-07:00
+> "YYYY-'W'ww-u"                 | 2001-W27-3
+
+##### `generatePassword()`
+
+Expands to a new password according to the format described above at [Password Generation](#-password-generation-). This function provides more fine-grained control than the `--generate-pass` option, which overrides any fixed passwords that may otherwise appear in the template (and will insert a password in `accept.password` if one is not supplied). When using `generatePassword()` for `accept.password`, generated and fixed (or otherwise calculated) passwords may be freely intermingled.
+
+Keep in mind that a password is _required_ when adding users.
+
+##### `exists(type, name)` or `exists(type, name, profile)`
+
+Expands to a `true` if the named resource of the specified type exists (in the Harmony indicated by the default or the named profile), or `false` otherwise. The following `type`s are understood:
+
+Type            | Description
+----------------|------------
+"user"          | if `name` is formatted as `"authenticator\name"`, then an attempt to find user `name` under authenticator `authenticator` is made. If no `authenticator` is provided (just `"name"`), then all authenticators are searched for user `name`. User names are required to be unique across authenticators, but if the authenticator name can be supplied the search is much more efficient.
+"authenticator" | searches for the named `authenticator`, of any type (not just `nativeUser`).
+"connection"    | searches for the named `connection`, of any type.
+
+Unlike the other built-in functions, `exists` requires a live API connection. This is indicated by the (optional) profile name and profile selection is handled as described in [Multiple Profiles](#-multiple-profiles-).
+
+When `--operation preview` is in effect, `exists()` always returns `false`.
 
 #### Testing your template
 

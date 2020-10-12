@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,6 +51,7 @@ public class MacroEngine {
     private Date now;
     private Map<String, String> data;
     private JsonNode object;
+    private Set<String> dontClear;
 
     /**
      * Returns {@code true} if the {@link ScriptEngine} has been started.
@@ -77,6 +79,8 @@ public class MacroEngine {
             engine.eval("load('nashorn:mozilla_compat.js');"
                     + "function date(format) { return new java.text.SimpleDateFormat(format).format(now); }");
             engine.put("now", now);
+            dontClear.add("date");
+            dontClear.add("now");
             if (data!=null) {
                 data(data);
             }
@@ -92,6 +96,7 @@ public class MacroEngine {
         this.now = new Date();
         this.data = null;
         this.object = null;
+        this.dontClear = new HashSet<>();
     }
 
     /**
@@ -272,9 +277,36 @@ public class MacroEngine {
     }
 
     /**
+     * Injects a variable into the JavaScript engine.
+     * @param key the variable name
+     * @param value the value
+     * @throws ScriptException
+     */
+    public void put(String key, Object value) throws ScriptException {
+        startEngine();
+        engine.put(key, value);
+        dontClear.add(key);
+    }
+
+    /**
+     * Evaluates and returns an expression as in {@link #eval(String)},
+     * but also reserves a variable/function name from being cleared.
+     * @param key the variable name to reserve
+     * @param expr the expression to evaluate
+     * @return the result
+     * @throws ScriptException
+     */
+    public Object eval(String key, String expr) throws ScriptException {
+        if (!Strings.isNullOrEmpty(key)) {
+            dontClear.add(key);
+        }
+        return eval(expr);
+    }
+
+    /**
      * Returns the results of evaluating the input {@code macro} as a JavScript
      * expression using the JavaScript engine. ReferenceErrors are caught and
-     * interpreted as {@code null} (undefined variables cause this erro). Other
+     * interpreted as {@code null} (undefined variables cause this error). Other
      * errors are propagated as {@code ScriptException}/
      * @param expr the input expression to evaluate
      * @return the result or {@code null}
@@ -285,6 +317,7 @@ public class MacroEngine {
         try {
             return engine.eval(expr);
         } catch (ScriptException e) {
+e.printStackTrace();
             if (e.getMessage().startsWith("ReferenceError:") ||
                     e.getMessage().startsWith("TypeError:")) {
                 return null;
@@ -410,7 +443,7 @@ public class MacroEngine {
         Bindings bindings = bindings();
         if (bindings != null) {
             for (String key : bindings.keySet()) {
-                if (key.equals("now") || key.equals("date")) {
+                if (dontClear.contains(key)) {
                     continue;
                 }
                 bindings.remove(key);

@@ -1608,9 +1608,47 @@ public class BatchProcessor {
         }
     }
 
+    public boolean exists(String type, String name, String profile) {
+        boolean found = false;
+        try {
+            if (!Strings.isNullOrEmpty(type) && !Strings.isNullOrEmpty(name)) {
+                setApi(profile);
+                switch (type) {
+                case "user":
+                    String[] path = name.split("\\\\", 2);
+                    if (path.length == 1) {
+                        found = api.getUser(name) != null;
+                    } else {
+                        String authfilter = "alias eq \""+path[0]+"\"";
+                        found = api.getUser(authfilter, path[1]) != null;
+                    }
+                    break;
+                case "authenticator":
+                    found = api.getAuthenticator(name) != null;
+                    break;
+                case "connection":
+                    found = api.getConnection(name) != null;
+                    break;
+                default:
+                }
+            }
+        } catch (Exception e) {
+            // assume no
+        }
+        return found;
+    }
+
+    private TemplateExpander setupTemplateExpander() throws Exception {
+        TemplateExpander expander = new TemplateExpander();
+        expander.put("processor", this);
+        expander.eval("generatePassword", "function generatePassword() { return "+PasswordGenerator.class.getName()+".generatePassword(); }");
+        expander.eval("exists", "function exists(type,name,profile) { return processor.exists(type,name,profile||\"\"); }");
+        return expander;
+    }
+
     private ArrayNode prepareContent(String content) throws Exception {
         // load file content into a string
-        TemplateExpander expander = new TemplateExpander();
+        TemplateExpander expander = setupTemplateExpander();
         boolean csvMode = false;
 
         // Option 1: try to load it as a JSON or YAML file (unless --template)

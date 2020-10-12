@@ -182,6 +182,36 @@ public class TemplateExpander {
         return this;
     }
 
+    /*-- hooks for expander functions ----------------------------------------*/
+
+    /**
+     * If the engine is set up, inserts a variable into the engine.
+     * @param key the variable name
+     * @param value the value
+     * @throws ScriptException
+     */
+    public void put(String key, Object value) throws ScriptException {
+        if (engine != null) {
+            engine.put(key, value);
+        }
+    }
+
+    /**
+     * If the engine is set up, evaluates and expression and returns the result,
+     * optionally protecting a variable name from being cleared.
+     * @param key the variable name to reserve (or {@code null})
+     * @param expr the expression to evaluate
+     * @return the result
+     * @throws ScriptException
+     */
+    public Object eval(String key, String expr) throws ScriptException {
+        Object value = null;
+        if (engine != null) {
+            value = engine.eval(key, expr);
+        }
+        return value;
+    }
+
     /*-- the expander internal implementation --------------------------------*/
 
     private static final Pattern LOOP_PATTERN = Pattern.compile("\\$\\{for\\s+(column\\s+)?([a-zA-Z_]\\w*)\\s*:(.*)\\}");
