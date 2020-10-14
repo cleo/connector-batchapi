@@ -7,15 +7,16 @@ import com.cleo.connector.api.annotations.Display;
 import com.cleo.connector.api.annotations.Property;
 import com.cleo.connector.api.interfaces.IConnectorProperty;
 import com.cleo.connector.api.property.PropertyBuilder;
-import com.cleo.labs.connector.batchapi.processor.Json;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.base.Strings;
+import com.google.gson.Gson;
 
 /**
  * Profile table extended property - @Array of subproperties (identified by @Property)
  */
 @Array(features = { OrderingColumns }) 
 public class ProfileTableProperty {
+
+    private static final Gson GSON = new Gson();
 
     /**
      * Display value for the Profile Table property
@@ -69,10 +70,6 @@ public class ProfileTableProperty {
      * @return a {@code Profile[]}, may be {@code Profile[0]}, but never {@code null}
      */
     public static Profile[] toProfiles(String value) {
-        try {
-            return Strings.isNullOrEmpty(value) ? new Profile[0] : Json.mapper.readValue(value, Profile[].class);
-        } catch (JsonProcessingException e) {
-            return new Profile[0];
-        }
+        return Strings.isNullOrEmpty(value) ? new Profile[0] : GSON.fromJson(value, Profile[].class);
     }
 }

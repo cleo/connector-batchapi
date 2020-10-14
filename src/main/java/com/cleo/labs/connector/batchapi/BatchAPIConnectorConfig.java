@@ -5,7 +5,6 @@ import java.nio.file.Paths;
 
 import com.cleo.connector.api.interfaces.ConnectorBase;
 import com.cleo.connector.api.property.ConnectorPropertyException;
-import com.cleo.connector.common.ConfigFileImport;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.OutputFormat;
 import com.google.common.base.Strings;
@@ -45,7 +44,7 @@ public class BatchAPIConnectorConfig {
     }
 
     public String getTemplate() throws ConnectorPropertyException {
-        return ConfigFileImport.value(schema.template.getValue(client));
+        return TemplateImport.value(schema.template.getValue(client));
     }
 
     public OutputFormat getOutputFormat() throws ConnectorPropertyException {
@@ -57,7 +56,7 @@ public class BatchAPIConnectorConfig {
     }
 
     public String getOutputTemplate() throws ConnectorPropertyException {
-        return ConfigFileImport.value(schema.outputTemplate.getValue(client));
+        return TemplateImport.value(schema.outputTemplate.getValue(client));
     }
 
     public boolean getEnableDebug() throws ConnectorPropertyException {

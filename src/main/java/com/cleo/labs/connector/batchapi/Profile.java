@@ -2,13 +2,16 @@ package com.cleo.labs.connector.batchapi;
 
 import com.cleo.labs.connector.batchapi.processor.ApiClient;
 import com.google.common.base.Strings;
+import com.google.gson.annotations.SerializedName;
 
 public class Profile {
     private boolean enabled;
+    @SerializedName("profilename")
     private String profileName;
     private String url;
     private String user;
     private String password;
+    @SerializedName("ignoretlschecks")
     private boolean ignoreTLSChecks;
 
     public Profile() {

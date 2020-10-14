@@ -14,7 +14,6 @@ import com.cleo.connector.api.interfaces.IConnectorProperty;
 import com.cleo.connector.api.property.CommonProperties;
 import com.cleo.connector.api.property.CommonProperty;
 import com.cleo.connector.api.property.PropertyBuilder;
-import com.cleo.connector.common.ConfigFileImport;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.OutputFormat;
 import com.google.common.base.Charsets;
@@ -76,7 +75,7 @@ public class BatchAPIConnectorSchema extends ConnectorConfig {
     final IConnectorProperty<String> template = new PropertyBuilder<>("Template", "")
             .setDescription("Explicit template to use when processing CSV request files")
             .setGroup(Connect)
-            .setExtendedClass(ConfigFileImport.class)
+            .setExtendedClass(TemplateImport.class)
             .setRequired(false)
             .build();
 
@@ -96,7 +95,7 @@ public class BatchAPIConnectorSchema extends ConnectorConfig {
     final IConnectorProperty<String> outputTemplate = new PropertyBuilder<>("OutputTemplate", "")
             .setDescription("Template to use when formatting CSV response files")
             .setGroup(Connect)
-            .setExtendedClass(ConfigFileImport.class)
+            .setExtendedClass(TemplateImport.class)
             .setRequired(false)
             .build();
 
