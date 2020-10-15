@@ -1,9 +1,11 @@
 package com.cleo.labs.connector.batchapi.processor;
 
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -43,6 +45,7 @@ public class ApiClient {
     public static String CONNECTIONS_URL = API_BASE+"/connections";
     public static String AUTHENTICATORS_URL = API_BASE+"/authenticators";
     public static String ACTIONS_URL = API_BASE+"/actions";
+    public static String CERTS_URL = API_BASE+"/certs";
 
     private String baseUrl;
     private String authToken;
@@ -124,7 +127,7 @@ public class ApiClient {
                 if (body != null) {
                     message += ": " + Json.getSubElementAsText(mapper.readTree(body), "message");
                 }
-                throw new ProcessingException(message);
+                throw new UnexpectedCodeException(message, code);
             }
         } finally {
             request.reset();
@@ -201,7 +204,7 @@ public class ApiClient {
      * VersaLex API Collections                                               *
      *------------------------------------------------------------------------*/
 
-    public class JsonCollection implements Iterator<ObjectNode> {
+    public class JsonCollection implements Iterator<ObjectNode>, Iterable<ObjectNode> {
         private String path;
         private String filter;
         private HttpClient httpClient = getDefaultHTTPClient();
@@ -290,6 +293,11 @@ public class ApiClient {
                 throw exception;
             }
         }
+
+        @Override
+        public Iterator<ObjectNode> iterator() {
+            return this;
+        }
     }
 
     /*------------------------------------------------------------------------*
@@ -310,6 +318,34 @@ public class ApiClient {
 
     public ObjectNode createAction(JsonNode actionJson) throws Exception {
         return post(actionJson, ACTIONS_URL);
+    }
+
+    public ObjectNode importOrGetCert(JsonNode certJson) throws Exception {
+        X509Certificate cert = CertUtils.cert(Json.getSubElementAsText(certJson, "certificate"));
+        String base64 = CertUtils.base64(cert);
+        if (base64 == null) {
+            throw new ProcessingException("unable to parse certificate");
+        }
+        ObjectNode importCert = Json.mapper.createObjectNode();
+        importCert.put("requestType", "importCert");
+        importCert.put("import", base64);
+        try {
+            return post(importCert, CERTS_URL);
+        } catch (UnexpectedCodeException e) {
+            if (e.code() == HttpURLConnection.HTTP_CONFLICT) {
+                String serial = cert.getSerialNumber().toString(16);
+                JsonCollection certs = new JsonCollection(CERTS_URL, "serialNumber eq \""+serial+"\"");
+                for (ObjectNode c : certs) {
+                    if (c.path("hasPrivateKey").asBoolean()) {
+                        continue;
+                    }
+                    if (base64.equals(Json.getSubElementAsText(c, "certificate"))) {
+                        return c;
+                    }
+                }
+            }
+            throw e;
+        }
     }
 
     private ObjectNode getResource(String resourcePath, String keyAttribute, String key) throws Exception {

@@ -658,6 +658,7 @@ public class BatchProcessor {
         batch.setAll(Json.removeElements(connectionOfficialCleanup(official.deepCopy()),
                 "alias",   // renamed to "connection" above
                 ACTIONSTOKEN));
+        certsExpandOfficial2Batch(batch);
         actionsCopyOfficial2Batch(official, batch);
         return batch;
     }
@@ -670,7 +671,7 @@ public class BatchProcessor {
      * @return the Official form object
      * @throws Exception
      */
-    private ObjectNode connectionBatch2Official(ObjectNode batch) {
+    private ObjectNode connectionBatch2Official(ObjectNode batch) throws Exception {
         ObjectNode official = Json.mapper.createObjectNode();
         Json.setSubElement(official, "alias", Json.getSubElement(batch, "connection"));
         official.setAll(Json.removeElements(batch.deepCopy(),
@@ -680,6 +681,7 @@ public class BatchProcessor {
         if (password != null) {
             Json.setSubElement(official, "connect.password", versalex.decrypt(password));
         }
+        certsImportBatch2Official(official);
         return official;
     }
 
@@ -763,6 +765,60 @@ public class BatchProcessor {
                 batchActions.set(action.get("alias").asText(), actionOfficial2Batch((ObjectNode)action));
             }
             batch.set("actions", batchActions);
+        }
+    }
+
+    /**
+     * Looks for Official form fields that point to certificates in a Batch form
+     * object as it is being prepared and expands the certificate references into
+     * the actual certificate.
+     * </p>
+     * A "certificate field" is one that is an ObjectNode with an "href" field
+     * that looks like "/api/certs/" (note that Harmony sometimes will return an
+     * "href" of just "/api/certs" when an object points to a cert that is not
+     * defined, so we skip over those by including the final "/"). If a proper
+     * certificate field is found, the certificate is chased from the API and
+     * the certificate contents are formatted as a folded base64 cert with header
+     * and trailer (see {@link CertUtils#export(String)}).
+     * @param batch the Batch form object to search for certificate fields and to update
+     * @throws Exception
+     */
+    private void certsExpandOfficial2Batch(ObjectNode batch) throws Exception {
+        for (JsonNode field : batch) {
+            String href = Json.getSubElementAsText(field, "href");
+            if (href != null && href.startsWith("/api/certs/")) {
+                ObjectNode cert = api.get(href);
+                ((ObjectNode)field).put("certificate", CertUtils.export(Json.getSubElementAsText(cert, "certificate")));
+            }
+        }
+    }
+
+    /**
+     * Looks for Batch form fields that contain (public key) certificate references
+     * in an Official form object as it is being prepared and converts those
+     * references into the "href" form expected by the API.
+     * <p/>
+     * A "certificate reference" in Batch form is a field with a "certificate" field
+     * inside, which contains an X509Certificate in some understandable form
+     * (see {@link CertUtils#cert(byte[])}). These found certificates are imported
+     * through the API and are replaced by the "href" of the imported object.
+     * <p/>
+     * Note that the API only allows a certificate to be imported once, so if the
+     * certificate already exists the "href" will point to the existing cert.
+     * @param official the Official form object to search and update
+     * @throws Exception
+     */
+    private void certsImportBatch2Official(ObjectNode official) throws Exception {
+        for (JsonNode field : official) {
+            if (field.isObject()) {
+                ObjectNode object = (ObjectNode)field;
+                String cert = Json.getSubElementAsText(object, "certificate");
+                if (cert != null) {
+                    ObjectNode imported = api.importOrGetCert(object);
+                    object.put("href", Json.getHref(imported));
+                    object.remove("certificate");
+                }
+            }
         }
     }
 

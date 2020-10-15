@@ -581,9 +581,113 @@ In addition to the `run` operation, the requests described above for actions can
 
 ### [&lt;](#-action-handling-) Certificate Handling [&gt;](#-multiple-profiles-)
 
-Like actions, certificates in the native Harmony API are handled as a separate linked resource.
+Like actions, certificates in the native Harmony API are handled as a separate linked resource. The batch utility masks this separation by embedding certificates directly into the properties for a connection that includes certificates.
 
-The batch utility will be updated to handle certificates as nested objects, but today certificates must be handled outside of the utility.
+For example, the [API specification](https://developer.cleo.com/api/api-reference/post-connections-as2.html) for an AS2 connection includes:
+
+Name | Type | Description
+-----|------|------------
+`partnerEncryptionCert`|object|A certificate. 
+`partnerEncryptionCert.href`|string (regex: ^.*/.*$)|The URI of the certificate.
+`partnerSigningCert`|object|A certificate.
+`partnerSigningCert.href`|string (regex: ^.*/.*$)|The URI of the certificate.
+
+meaning that a request to include certificates in an add request should look like:
+
+```
+---
+operation: add
+connection: sample
+type: as2
+...
+  partnerEncryptionCert:
+    href: /api/certs/68d7b56581a78f943539a02a9a31f603667d28da
+  partnerSigningCert:
+    href: /api/certs/ee203220b067f824f63384b297d0237e64651cff
+...
+```
+
+where the certificates should have been imported ahead of time to obtain `href` links. The batch utility handles certificates as if they are directly embedded properties of the connection:
+
+```
+---
+operation: add
+connection: sample
+type: as2
+...
+  partnerEncryptionCert:
+    certificate: |-
+      -----BEGIN CERTIFICATE-----
+      MIIDRjCCAi6gAwIBAgIQFilIVuBNTraKlA3WHvvmuDANBgkqhkiG9w0BAQsFADAy
+      MQswCQYDVQQGEwJVUzENMAsGA1UECgwEQ2xlbzEUMBIGA1UEAwwLRGVtbyBJc3N1
+      ZXIwHhcNMjAxMDAxMDMyMDA4WhcNMjExMDAxMDMyMDA4WjAjMQswCQYDVQQGEwJV
+      UzEUMBIGA1UEAwwLRW5jcnlwdCAxMDUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAw
+      ggEKAoIBAQDRCkqE7l87RJ6f4kOIDgqpPzXX3YGrXrBmxzKqQ+4Ve1hrDbuMkWDJ
+      Fhfo/FwWJgvfpasbHpgNF9gP/N8pTzR7NVOa4ZPujCIWf5dnA+DH/wK5ER/zMXFb
+      uCEm6ov+5WUDBxI/gxorBPUD0pPOZv8ST2NBX+jd1Xg280FJ/eWeDOGQRnaS7PGs
+      Ud74LtJyTZPRWEHKglxEFcC46uButasqKPEqrLVfC4kU5Hu560DfeVwpxoL4mani
+      b/pW/d/bkETUhE3XurxsT41ZxAHfAoIV7ECVHfSbIVKCJXIRhjlFtsdiYtpX/YXg
+      KnBj3XpalySQEpGc3ps4yzQgnRmyjgB3AgMBAAGjZzBlMAsGA1UdDwQEAwIFoDAW
+      BgNVHSUBAf8EDDAKBggrBgEFBQcDATAdBgNVHQ4EFgQUG+qvK69+NVHWdfFB10kW
+      vtNGUMUwHwYDVR0jBBgwFoAU52GI/XKU1F8qd36/Z06p+mp4t9MwDQYJKoZIhvcN
+      AQELBQADggEBADE2do/HqSFBzSkZHyFi2z4VgGVJq/TnG61Kdl5Kz2dfLRu1+NeW
+      XmBgge5ebInza5D2+uVmMf2/G9Ws4WLelxr1yESmhMoliA6jZAyhn81/AaznNjvy
+      zyTsqcFvrm6UBGNjjU3BWQMrhA6p1bcoCCuy/CSLeHJ1v+ofG1ih+31Vbq77h/ni
+      w+sZjfIA3rwo9oazlC9mQdoPOGxSFT2j+ygfHKoHCLIhBkiRhcXVne4Rozof/fma
+      jIhLSh/5Feu24TpdIy9vn8P/PvefRGIOu61D1Jlffc93m3oi6bXBo9JvoA+v/pJP
+      2eV0+LxehsQ9CvLyvBAP8H2uH6g/y5Fl9/4=
+      -----END CERTIFICATE-----
+  partnerSigningCert:
+    certificate: |-
+      MIIDQzCCAiugAwIBAgIQLGG6JRAsQ4S5W1ZBieixJTANBgkqhkiG9w0BAQsFADAy
+      MQswCQYDVQQGEwJVUzENMAsGA1UECgwEQ2xlbzEUMBIGA1UEAwwLRGVtbyBJc3N1
+      ZXIwHhcNMjAxMDAxMDMyMDA4WhcNMjExMDAxMDMyMDA4WjAgMQswCQYDVQQGEwJV
+      UzERMA8GA1UEAwwIU2lnbiAxMDUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+      AoIBAQC2MqK1Z1Bg08tJdpo3S6iQ7vcsBFlK4OKdkYuhf9Wioy/J+oHmichzPxE5
+      jOCC9gM1iDZ9X7reEUVDKyDb83wT2qj5cO0vw7jj8hVrmybRsJLRheYRsjC5HUyR
+      gIU8rG5drkwbE0UDZXYSp41puotpsGwwnctdwczNolBiSlJnv844uGtawstOE7Su
+      eWG8STWLDFcdx26lo45pllpbvE0u8t6MFzwpt8z5GSzjz5wksIANg1IcIruIdmvm
+      f9CZ/qS8VpFwqvsPhWdXYZqjRquo4UMmTDA26IQOn+9jQEQ0toZn7AZPS4mU5v+X
+      tbzHCMq7QbMKKe2i8SvsrbKoAnTVAgMBAAGjZzBlMAsGA1UdDwQEAwIFoDAWBgNV
+      HSUBAf8EDDAKBggrBgEFBQcDATAdBgNVHQ4EFgQUeBrHJ1fNFMBlzZhmRPFtbVq1
+      JAUwHwYDVR0jBBgwFoAU52GI/XKU1F8qd36/Z06p+mp4t9MwDQYJKoZIhvcNAQEL
+      BQADggEBAEEIXPAysj6SsibGIPH0VWeADr0w5WvsxjqnLeCXLMwvsRPUKvUPPFGB
+      KgfTHcBllZl7GriylJAnPy5FpHBgXxiTp6nn8had3yM6gA8sOjG4DntNhy/Tsh96
+      KpUTeP63pMj6mhLfzAuWzEQLmIgQX88FIraXWESrmZcYnZy9sS/DPnMhtwkmGYxl
+      UdgcTDbUUk7Pn5wAdNiNv7swFu1ig3SYgp21opqmBtEHmbOQranJjC+nFgejyrdt
+      qJpNW5gIixoslRlr8OLnU3uAwiNBQgIZHSsnjybALw3bv+ChfEAGBPfVIXtCPETZ
+      9OjeQgulu5t1XepHst0rnzk9N1BWH+0=
+...
+```
+
+The `certificate` property is a string, and the batch utility will accept several forms:
+
+* a single base64-encoded string all on one line `certificate: MIIDQzCCAiugAwIBAgIQLGG6JR...k9N1BWH+0=`
+* a multi-line base64-encoded string, as illustrated above for `partnerSigningCert`
+* a multi-line base64-encoded string framed in `BEGIN` and `END` delimiters, as illustrated above for `partnerEncryptionCert` (this is the typical `.crt` or PEM format used by tools such as `openssl`)
+
+The certificate may be a single stand-alone certificate, represented in PEM format as:
+
+```
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+```
+
+or it may be part of a PKCS#7 certificate chain, typically found in file names ending with extensions like `.p7b` or `.p7c` or represented in PEM format as:
+
+```
+-----BEGIN PKCS7-----
+...
+-----END PKCS7-----
+```
+
+When processing a PKCS#7 certificate chain, any issuer certificates are ignored and the final "end entity" certificate is used (if for some reason there are multiple "end entity" certificates in the bundle, the first one is used).
+
+If the certificate is already imported into Harmony, the existing certificate "href" reference is reused and an additional cross-reference is added to the certificate's `usage` links (see [`GET certs/{certid}`](https://developer.cleo.com/api/api-reference/get-certs-certid.html)).
+
+> **Note** only public key certificate usage contexts are supported (e.g. `partnerEncryptionCert` and `partnerSigningCert` for AS2), not private key contexts (e.g. `localEncryptionCert` and `localSigningCert` for AS2).
+
 
 ## [&LessLess;](#-request-processing-) Multiple Profiles [&GreaterGreater;](#-csv-files-and-templates-)
 
