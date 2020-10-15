@@ -5,7 +5,7 @@
 
   <groupId>com.cleo.labs.connector</groupId>
   <artifactId>connector-batchapi</artifactId>
-  <version>0.9-RC2</version>
+  <version>0.9-RC3-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>connector-batchapi</name>
@@ -205,8 +205,8 @@
         <artifactId>github-release-plugin</artifactId>
         <version>${github.release.plugin.version}</version>
         <configuration>
-          <description>Second 0.9 release in Github</description>
-          <releaseName>0.9 RC2</releaseName>
+          <description>Third 0.9 release in Github</description>
+          <releaseName>0.9 RC3</releaseName>
           <tag>${project.version}</tag>
           <fileSets>
             <fileSet>
