@@ -5,6 +5,7 @@ import static com.cleo.connector.api.command.ConnectorCommandName.DELETE;
 import static com.cleo.connector.api.command.ConnectorCommandName.DIR;
 import static com.cleo.connector.api.command.ConnectorCommandName.GET;
 import static com.cleo.connector.api.command.ConnectorCommandName.PUT;
+import static com.cleo.connector.api.command.ConnectorCommandName.RENAME;
 import static com.cleo.connector.api.command.ConnectorCommandOption.Delete;
 import static com.cleo.connector.api.command.ConnectorCommandOption.Unique;
 
@@ -79,7 +80,7 @@ public class BatchAPIConnectorClient extends ConnectorClient {
     }
 
     @Command(name=DELETE)
-    public ConnectorCommandResult other(OtherCommand delete) throws ConnectorException {
+    public ConnectorCommandResult delete(OtherCommand delete) throws ConnectorException {
         String relativepath = delete.getSource();
         logger.debug(String.format("DELETE '%s'", relativepath));
 
@@ -92,6 +93,24 @@ public class BatchAPIConnectorClient extends ConnectorClient {
             return new ConnectorCommandResult(Status.Error, String.format("'%s' is not a file", relativepath));
         } else if (!file.delete()) {
             return new ConnectorCommandResult(Status.Error, "Delete failed.");
+        } else {
+            return new ConnectorCommandResult(Status.Success);
+        }
+    }
+
+    @Command(name=RENAME)
+    public ConnectorCommandResult rename(OtherCommand rename) throws ConnectorException {
+        String relativesource = rename.getSource();
+        String relativedestination = rename.getDestination();
+        logger.debug(String.format("RENAME '%s' '%s'", relativesource, relativedestination));
+
+        Path path = config.getWorkingDirectory().resolve(relativesource);
+        File file = path.toFile();
+        if (!file.exists()) {
+            throw new ConnectorException(String.format("'%s' does not exist or is not accessible", file.getPath()),
+                    ConnectorException.Category.fileNonExistentOrNoAccess);
+        } else if (!file.renameTo(config.getWorkingDirectory().resolve(relativedestination).toFile())) {
+            return new ConnectorCommandResult(Status.Error, "Rename failed.");
         } else {
             return new ConnectorCommandResult(Status.Success);
         }
