@@ -1752,12 +1752,16 @@ public class BatchProcessor {
                     }
                     file.add(errorNode);
                 } else if (result.expanded().isArray()) {
-                    ((ObjectNode)result.expanded().get(0))
-                        .set("csvdata", Json.mapper.valueToTree(result.line()));
+                    if (csvMode) {
+                        ((ObjectNode)result.expanded().get(0))
+                            .set("csvdata", Json.mapper.valueToTree(result.line()));
+                    }
                     file.addAll((ArrayNode)result.expanded());
                 } else {
-                    ((ObjectNode)result.expanded())
-                        .set("csvdata", Json.mapper.valueToTree(result.line()));
+                    if (csvMode) {
+                        ((ObjectNode)result.expanded())
+                            .set("csvdata", Json.mapper.valueToTree(result.line()));
+                    }
                     file.add(result.expanded());
                 }
             }
