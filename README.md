@@ -71,6 +71,7 @@ usage: com.cleo.labs.connector.batchapi.processor.Main
     --operation <OPERATION>      default operation: list, add, update, delete or preview
     --output-format <FORMAT>     output format: yaml (default), json, or csv
     --output-template <TEMPLATE> template for formatting csv output
+    --log <FILE>                 log to file when using output-template
     --include-defaults           include all default values when listing connections
     --template <TEMPLATE>        load CSV file using provided template
     --profile <PROFILE>          Connection profile to use
@@ -231,9 +232,10 @@ Command Line                    | Connector         | Description
 --operation &lt;OPERATION&gt;   | Default Operation | The default operation for entries lacking an explicit "operation"
 --output-format &lt;FORMAT&gt;  | Output Format     | Output format: yaml (default), json, or csv
 --output-template&nbsp;&lt;TEMPLATE&gt; | Output Template | Template for formatting csv output (required with csv)
+--log&nbsp;&lt;FILE&gt;         | &nbdp;            | Also log YAML output to file when using output-template
 --profile &lt;PROFILE&gt;       | &nbsp;            | The named profile to load instead of "default"
 --include-defaults              | &nbsp;            | Include all default values when listing connections
---template &lt;TEMPLATE&gt;     | &nbsp;            | load CSV file using provided template
+--template &lt;TEMPLATE&gt;     | Template          | load CSV file using provided template
 --save                          | &nbsp;            | Select to create/update named profile (or "default")
 --remove                        | &nbsp;            | Select to remove named profile (or "default")
 
@@ -1119,4 +1121,16 @@ Errors that occur during processing of the request will have corresponding error
 ${if:data.result.status=='error'}:
   ${error}: ${data.result.message}
 ...
+```
+
+If the input file was a CSV file (if `--template` or `Template` was specified), the original parsed CSV data is included in the `data.result.csvdata` object. This may be useful producing an output format that reflects the input when some input columns are not directly reflected in the created objects.
+
+```
+---
+columns:
+- name: Ignored Column
+- name: Username
+tenmplate:
+  Ignored Column: ${data.result.csvdata["Original Input"]}
+  Username: ${data.username}
 ```

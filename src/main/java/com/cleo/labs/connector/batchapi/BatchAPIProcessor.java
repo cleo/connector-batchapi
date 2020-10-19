@@ -3,6 +3,7 @@ package com.cleo.labs.connector.batchapi;
 import java.io.ByteArrayOutputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -13,7 +14,7 @@ import com.cleo.labs.connector.batchapi.processor.ApiClient;
 import com.cleo.labs.connector.batchapi.processor.ApiClientFactory;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
-import com.cleo.labs.connector.batchapi.processor.Json;
+import com.cleo.labs.connector.batchapi.processor.BatchProcessor.OutputFormat;
 import com.google.common.base.Strings;
 import com.google.common.io.CountingOutputStream;
 
@@ -40,7 +41,7 @@ public class BatchAPIProcessor extends FilterOutputStream {
         return new ApiClientFactory() {
             @Override
             public ApiClient getApiClient(String profileName) throws Exception {
-                Profile selected = null;     // set if we gert a match by name
+                Profile selected = null;     // set if we get a match by name
                 Profile firstEnabled = null; // the first enabled profile
                 Profile firstDefault = null; // the first enabled profile named "default"
                 Profile[] profiles = config.getProfiles();
@@ -69,7 +70,7 @@ public class BatchAPIProcessor extends FilterOutputStream {
         };
     }
 
-    private void process(Path result) throws IOException {
+    private void process(Path outputFile, Path logFile) throws IOException {
         ApiClientFactory factory = null;
         try {
             if (config.getDefaultOperation() != Operation.preview) {
@@ -98,33 +99,58 @@ public class BatchAPIProcessor extends FilterOutputStream {
             if (!Strings.isNullOrEmpty(outputTemplate)) {
                 processor.setOutputTemplate(outputTemplate);
             }
+            if (logFile != null) {
+                processor.setLogOutput(logFile);
+            }
         } catch (ConnectorPropertyException ignore) {}
 
         String content = bytes.toString();
-        logger.debug(content);
         processor.processFile(path.getFileName().toString(), content);
-
-        Json.mapper.writeValue(result.toFile(), processor.calculateResults());
+        try (PrintStream out = new PrintStream(outputFile.toFile())) {
+            processor.formatOutput(out);
+        }
     }
 
-    private Path unique(Path parent, String base, String suffix) {
-        String name = base + Strings.nullToEmpty(suffix);
+    private String unique(Path parent, String base, String suffix1, String suffix2) {
+        suffix1 = Strings.nullToEmpty(suffix1);
+        suffix2 = Strings.nullToEmpty(suffix2);
+        String test = base;
         int counter = 0;
-        while (Files.exists(parent.resolve(name))) {
+        while (Files.exists(parent.resolve(test+suffix1)) || Files.exists(parent.resolve(test+suffix2))) {
             counter++;
-            name = base+"("+counter+")"+Strings.nullToEmpty(suffix);
+            test = base+"("+counter+")";
         }
-        return parent.resolve(name);
+        return test;
     }
 
     @Override
     public void close() throws IOException {
         super.close();
 
-        String name = path.getFileName().toString().replaceAll("(?i)\\.(ya?ml|csv|txt)$", "");
-        Path result = unique(path.getParent(), name, ".result.yaml");
-        logger.debug("generating "+result.getFileName()+" from "+path.getFileName());
-        process(result);
+        String name = path.getFileName().toString();
+        String base = name.replaceFirst("\\.[^.]*$","");
+        OutputFormat outputFormat;
+        try {
+            if (!Strings.isNullOrEmpty(config.getOutputTemplate())) {
+                outputFormat = OutputFormat.csv;
+            } else {
+                outputFormat = config.getOutputFormat();
+            }
+        } catch (ConnectorPropertyException e) {
+            outputFormat = OutputFormat.yaml;
+        }
+        String ext = "."+outputFormat.name();
+        String log = outputFormat == OutputFormat.csv ? ".log" : null;
+        Path parent = path.getParent();
+        String unique = unique(parent, base, ext, log);
+        Path outputFile = parent.resolve(unique+ext);
+        Path logFile = null;
+        logger.debug("generating "+outputFile.getFileName()+" from "+path.getFileName());
+        if (outputFormat == OutputFormat.csv) {
+            logFile = outputFormat == OutputFormat.csv ? parent.resolve(unique+log) : null;
+            logger.debug("logging to "+logFile+" from "+path.getFileName());
+        }
+        process(outputFile, logFile);
     }
 
 }

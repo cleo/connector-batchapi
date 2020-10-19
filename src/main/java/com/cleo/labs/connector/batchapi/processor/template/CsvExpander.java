@@ -96,6 +96,7 @@ public class CsvExpander {
         if (errors.size() > 0) {
             PrintWriter writer = new PrintWriter(out);
             for (ExpanderResult error : errors) {
+error.exception().printStackTrace();
                 writer.println("ERROR: "+error.exception().getClass().getSimpleName()+" - "+
                     error.exception().getMessage());
             }

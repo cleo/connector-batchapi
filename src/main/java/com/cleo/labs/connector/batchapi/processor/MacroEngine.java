@@ -213,7 +213,7 @@ public class MacroEngine {
                     return null;
                 }
             } else if (singleton.endsWith(STRING_SUFFIX)) {
-                String value = expr(singleton.substring(0, singleton.length()-STRING_SUFFIX.length())).toString();
+                String value = asString(singleton.substring(0, singleton.length()-STRING_SUFFIX.length())).toString();
                 return TextNode.valueOf(value);
             } else {
                 return asNode(singleton);
@@ -222,7 +222,7 @@ public class MacroEngine {
         } else {
             StringBuilder sb = new StringBuilder();
             while (m.find()) {
-                m.appendReplacement(sb, expr(m.expression()).toString());
+                m.appendReplacement(sb, asString(m.expression()).toString());
             }
             m.appendTail(sb);
             String value = sb.toString();
@@ -304,7 +304,7 @@ public class MacroEngine {
     }
 
     /**
-     * Returns the results of evaluating the input {@code macro} as a JavScript
+     * Returns the results of evaluating the input {@code macro} as a JavaScript
      * expression using the JavaScript engine. ReferenceErrors are caught and
      * interpreted as {@code null} (undefined variables cause this error). Other
      * errors are propagated as {@code ScriptException}/
@@ -406,7 +406,23 @@ public class MacroEngine {
         }
     }
 
-    public List<String> asArray(String expr) throws ScriptException {
+    public String asString(String expr) throws ScriptException {
+        try {
+            Object result = expr(expr);
+            if (result == null) {
+                return "";
+            }
+            return result.toString();
+        } catch (ScriptException e) {
+            if (e.getMessage().startsWith("ReferenceError:") ||
+                    e.getMessage().startsWith("TypeError:")) {
+                return "";
+            }
+            throw e;
+        }
+    }
+
+   public List<String> asArray(String expr) throws ScriptException {
         Object result = expr(expr);
         if (result==null) {
             return null;

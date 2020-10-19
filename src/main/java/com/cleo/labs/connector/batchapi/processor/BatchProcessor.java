@@ -59,6 +59,7 @@ public class BatchProcessor {
     private boolean generatePasswords;
     private OutputFormat outputFormat;
     private String outputTemplate;
+    private Path logOutput;
     private VersaLex versalex;
 
     public BatchProcessor setExportPassword(String exportPassword) {
@@ -107,6 +108,11 @@ public class BatchProcessor {
 
     public BatchProcessor setOutputTemplate(String outputTemplate) {
         this.outputTemplate = outputTemplate;
+        return this;
+    }
+
+    public BatchProcessor setLogOutput(Path logOutput) {
+        this.logOutput = logOutput;
         return this;
     }
 
@@ -1038,12 +1044,28 @@ public class BatchProcessor {
      * @param node the node to modify
      * @param success {@code true} for "success" else "error"
      * @param message the (optional) "message" to add
+     * @param request the (optional) request from which to copy csvdata
+     * @return the modified node
+     */
+    public static ObjectNode insertResult(ObjectNode node, boolean success, String message, Request request) {
+        ObjectNode result = Json.setSubElement((ObjectNode)node.get("result"), "status", success ? "success" : "error");
+        Json.setSubElement(result, "message", message);
+        if (request != null && request.csvdata != null) {
+            result.set("csvdata", request.csvdata);
+        }
+        return (ObjectNode) ((ObjectNode)Json.mapper.createObjectNode().set("result", result)).setAll(node);
+    }
+
+    /**
+     * Adds a "result" object containing "status" (success or error) and
+     * "message" fields to the top of an ObjectNode
+     * @param node the node to modify
+     * @param success {@code true} for "success" else "error"
+     * @param message the (optional) "message" to add
      * @return the modified node
      */
     public static ObjectNode insertResult(ObjectNode node, boolean success, String message) {
-        ObjectNode result = Json.setSubElement((ObjectNode)node.get("result"), "status", success ? "success" : "error");
-        Json.setSubElement(result, "message", message);
-        return (ObjectNode) ((ObjectNode)Json.mapper.createObjectNode().set("result", result)).setAll(node);
+        return insertResult(node, success, message, null);
     }
 
     private static class StackTraceCapture extends PrintStream {
@@ -1117,7 +1139,8 @@ public class BatchProcessor {
             authenticator = createAuthenticatorFromTemplate(alias);
             results.add(insertResult(authenticatorOfficial2Batch(authenticator),
                     true,
-                    String.format("created authenticator %s with default template", alias)));
+                    String.format("created authenticator %s with default template", alias)),
+                    request);
             */
         }
         // Create user
@@ -1146,7 +1169,7 @@ public class BatchProcessor {
         if (request.actions != null) {
             createActions(request.actions, officialResult);
         }
-        results.add(insertResult(userOfficial2Batch(officialResult), true, "created "+request.resource));
+        results.add(insertResult(userOfficial2Batch(officialResult), true, "created "+request.resource, request));
     }
 
     private void processAddAuthenticator(Request request, ArrayNode results) throws Exception {
@@ -1158,7 +1181,7 @@ public class BatchProcessor {
         if (request.actions != null) {
             createActions(request.actions, officialResult);
         }
-        results.add(insertResult(authenticatorOfficial2Batch(officialResult), true, "created "+request.resource));
+        results.add(insertResult(authenticatorOfficial2Batch(officialResult), true, "created "+request.resource, request));
     }
 
     private void processAddConnection(Request request, ArrayNode results) throws Exception {
@@ -1182,7 +1205,7 @@ public class BatchProcessor {
         if (request.actions != null) {
             createActions(request.actions, officialResult);
         }
-        results.add(insertResult(batchResult, true, "created "+request.resource));
+        results.add(insertResult(batchResult, true, "created "+request.resource, request));
     }
 
     private void processAddAction(Request request, ArrayNode results) throws Exception {
@@ -1272,7 +1295,7 @@ public class BatchProcessor {
                 if (toUpdate.size() > 1) {
                     message += String.format(" (%d of %d)", i+1, toUpdate.size());
                 }
-                results.add(insertResult(official2Batch(updated), true, message));
+                results.add(insertResult(official2Batch(updated), true, message, request));
             } catch (Exception e) {
                 results.add(insertResult(official2Batch(toUpdate.get(i)), false, e));
             }
@@ -1292,7 +1315,7 @@ public class BatchProcessor {
             if (list.size() > 1) {
                 message = String.format("%s (%d of %d)", message, i++, list.size());
             }
-            results.add(insertResult(userOfficial2Batch(user), true, message));
+            results.add(insertResult(userOfficial2Batch(user), true, message, request));
         }
         return list;
     }
@@ -1315,12 +1338,12 @@ public class BatchProcessor {
             if (includeUsers) {
                 message = String.format("%s with %d users", message, users.size());
             }
-            ObjectNode authenticatorResult = insertResult(authenticator, true, message);
+            ObjectNode authenticatorResult = insertResult(authenticator, true, message, request);
             ArrayNode userResults = authenticatorResult.putArray(USERSTOKEN);
             for (int j=0; j<users.size(); j++) {
                 message = String.format("%s: user %d of %d",
                         messageHeader, j+1, users.size());
-                userResults.add(insertResult(userOfficial2Batch((ObjectNode)users.get(j)), true, message));
+                userResults.add(insertResult(userOfficial2Batch((ObjectNode)users.get(j)), true, message, request));
             }
             results.add(authenticatorOfficial2Batch(authenticatorResult));
         }
@@ -1337,7 +1360,7 @@ public class BatchProcessor {
             if (list.size() > 1) {
                 message = String.format("%s (%d of %d)", message, i++, list.size());
             }
-            results.add(insertResult(connectionOfficial2Batch(connection), true, message));
+            results.add(insertResult(connectionOfficial2Batch(connection), true, message, request));
         }
         return list;
     }
@@ -1381,7 +1404,7 @@ public class BatchProcessor {
                     request.operation.tag(),
                     Json.getSubElementAsText(action, "alias"),
                     i++, list.size());
-            results.add(insertResult(actionOfficial2Batch(action), true, message));
+            results.add(insertResult(actionOfficial2Batch(action), true, message, request));
         }
         return list;
     }
@@ -1454,6 +1477,7 @@ public class BatchProcessor {
         public String actionFilter = null;          // filter for actions, if using one
         public ObjectNode entry = null;             // edited/cleaned up entry to query on
         public ObjectNode actions = null;           // actions separated out from entry and cleaned up
+        public ObjectNode csvdata = null;           // original CSV data if the request was templated from CSV
         public Operation operation = null;          // the operation
     }
 
@@ -1480,6 +1504,9 @@ public class BatchProcessor {
         
         // collect actions into an ObjectNode
         request.actions = normalizeActions(request.entry.remove("actions"));
+
+        // squirrel away csvdata
+        request.csvdata = (ObjectNode)request.entry.remove("csvdata");
 
         // remove other stuff that might be from a reflected result
         request.entry.remove("result");
@@ -1725,8 +1752,12 @@ public class BatchProcessor {
                     }
                     file.add(errorNode);
                 } else if (result.expanded().isArray()) {
+                    ((ObjectNode)result.expanded().get(0))
+                        .set("csvdata", Json.mapper.valueToTree(result.line()));
                     file.addAll((ArrayNode)result.expanded());
                 } else {
+                    ((ObjectNode)result.expanded())
+                        .set("csvdata", Json.mapper.valueToTree(result.line()));
                     file.add(result.expanded());
                 }
             }
@@ -1803,7 +1834,7 @@ public class BatchProcessor {
                 }
                 switch (request.operation) {
                 case preview:
-                    results.add(insertResult(original, true, "request preview"));
+                    results.add(insertResult(original, true, "request preview", request));
                     break;
                 case add:
                     processAdd(request, results, passwords);
@@ -1846,7 +1877,7 @@ public class BatchProcessor {
                                 }
                                 ObjectNode report = Json.mapper.createObjectNode();
                                 report.set("output", output);
-                                results.add(insertResult(report, true, message));
+                                results.add(insertResult(report, true, message, request));
                             } catch (Exception e) {
                                 results.add(insertResult(toRun.get(i), false, e));
                             }
@@ -1859,6 +1890,43 @@ public class BatchProcessor {
             } catch (Exception e) {
                 results.add(insertResult(original, false, e));
             }
+        }
+    }
+
+    public void formatOutput(PrintStream out) throws IOException {
+        ArrayNode output = calculateResults();
+        switch (outputFormat) {
+        case yaml:
+            Json.mapper.writeValue(out, output);
+            break;
+        case json:
+            new ObjectMapper()
+                .configure(SerializationFeature.INDENT_OUTPUT, true)
+                .configure(Feature.AUTO_CLOSE_TARGET, false)
+                .writeValue(out, output);
+            out.println();
+            break;
+        case csv:
+            IOException savedException = null;
+            if (logOutput != null) {
+                try {
+                    Json.mapper.writeValue(logOutput.toFile(), output);
+                } catch (IOException e) {
+                    savedException = e;
+                }
+            }
+            try {
+                new CsvExpander()
+                    .template(outputTemplate)
+                    .data(output)
+                    .writeTo(out);
+            } catch (Exception e) {
+                throw new IOException(e);
+            }
+            if (savedException != null) {
+                throw savedException;
+            }
+            break;
         }
     }
 
@@ -1877,30 +1945,7 @@ public class BatchProcessor {
                     : new String(Files.readAllBytes(Paths.get(fn)));
             processFile(fn, content);
         }
-
-        ArrayNode output = calculateResults();
-        switch (outputFormat) {
-        case yaml:
-            Json.mapper.writeValue(System.out, output);
-            break;
-        case json:
-            new ObjectMapper()
-                .configure(SerializationFeature.INDENT_OUTPUT, true)
-                .configure(Feature.AUTO_CLOSE_TARGET, false)
-                .writeValue(System.out, output);
-            System.out.println();
-            break;
-        case csv:
-            try {
-                new CsvExpander()
-                    .template(outputTemplate)
-                    .data(output)
-                    .writeTo(System.out);
-            } catch (Exception e) {
-                throw new IOException(e);
-            }
-            break;
-        }
+        formatOutput(System.out);
     }
 
     /**
@@ -1916,6 +1961,7 @@ public class BatchProcessor {
         this.traceRequests = false;
         this.generatePasswords = false;
         this.outputFormat = OutputFormat.yaml;
+        this.logOutput = null;
         loadVersaLex();
         reset();
     }

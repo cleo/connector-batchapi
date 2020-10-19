@@ -110,6 +110,14 @@ public class Main {
                 .build());
 
         options.addOption(Option.builder()
+                .longOpt("log")
+                .hasArg()
+                .argName("FILE")
+                .desc("log to file when using output-template")
+                .required(false)
+                .build());
+
+        options.addOption(Option.builder()
                 .longOpt("include-defaults")
                 .desc("include all default values when listing connections")
                 .required(false)
@@ -307,6 +315,7 @@ public class Main {
         BatchProcessor.Operation operation = null;
         BatchProcessor.OutputFormat outputFormat = null;
         String outputTemplate = null;
+        String logFile = null;
         try {
             Options options = getOptions();
             cmd = parser.parse(options, args);
@@ -322,6 +331,20 @@ public class Main {
                         throw new Exception("output-template is required when output-format is csv");
                     }
                     outputTemplate = cmd.getOptionValue("output-template");
+                    logFile = cmd.getOptionValue("log");
+                }
+            }
+            if (outputFormat != OutputFormat.csv) {
+                List<String> invalid = new ArrayList<>();
+                if (cmd.hasOption("output-template")) {
+                    invalid.add("output-template");
+                }
+                if (cmd.hasOption("log")) {
+                    invalid.add("log");
+                }
+                if (!invalid.isEmpty()) {
+                    throw new Exception(invalid.stream().collect(Collectors.joining(",")) +
+                        " only valid with outout-format of csv");
                 }
             }
         } catch (Exception e) {
@@ -350,6 +373,9 @@ public class Main {
             }
             if (outputTemplate != null) {
                 processor.setOutputTemplate(Paths.get(outputTemplate));
+                if (logFile != null) {
+                    processor.setLogOutput(Paths.get(logFile));
+                }
             }
             processor.processFiles(cmd.getOptionValues("input"));
             processor.close();
