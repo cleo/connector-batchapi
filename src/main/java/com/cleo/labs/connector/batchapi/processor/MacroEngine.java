@@ -3,10 +3,10 @@ package com.cleo.labs.connector.batchapi.processor;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
-import java.text.SimpleDateFormat;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -48,7 +48,7 @@ public class MacroEngine {
     }
 
     private ScriptEngine engine;
-    private Date now;
+    private ZonedDateTime now;
     private Map<String, String> data;
     private JsonNode object;
     private Set<String> dontClear;
@@ -77,7 +77,7 @@ public class MacroEngine {
             //engine = engine_factory.getEngineByName("nashorn");
             //engine = new NashornScriptEngineFactory().getScriptEngine();
             engine.eval("load('nashorn:mozilla_compat.js');"
-                    + "function date(format) { return new java.text.SimpleDateFormat(format).format(now); }");
+                    + "function date(format) { return java.time.format.DateTimeFormatter.ofPattern(format).format(now); }");
             engine.put("now", now);
             dontClear.add("date");
             dontClear.add("now");
@@ -93,7 +93,7 @@ public class MacroEngine {
      * 
      */
     public MacroEngine() {
-        this.now = new Date();
+        this.now = ZonedDateTime.now();
         this.data = null;
         this.object = null;
         this.dontClear = new HashSet<>();
@@ -249,7 +249,7 @@ public class MacroEngine {
         Matcher date = DATEFUNCTION.matcher(name);
         if (date.matches()) {
             String format = Strings.nullToEmpty(date.group(1)) + Strings.nullToEmpty(date.group(2));
-            return new SimpleDateFormat(format).format(now);
+            return DateTimeFormatter.ofPattern(format).format(now);
         } else {
             if (data!=null && data.containsKey(name)) {
                 return data.get(name);

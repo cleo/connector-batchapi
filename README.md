@@ -1024,7 +1024,7 @@ In addition to the standard JavaScript environment, the following functions and 
 
 ##### `date(format)`
 
-Expands to a timestamp of the current time (as of when template processing started&mdash;all `date` functions in a template will expand using exactly the same time instanc) using a Java [SimpleDateFormat](https://docs.oracle.com/javase/8/docs/api/java/text/SimpleDateFormat.html). Examples from the Java documentation:
+Expands to a timestamp of the current time (as of when template processing started&mdash;all `date` functions in a template will expand using exactly the same time instanc) using a Java [DateTimeFormatter](https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html). Examples from the Java documentation:
 
 > The following examples show how date and time patterns are interpreted in the U.S. locale. The given date and time are 2001-07-04 12:08:56 local time in the U.S. Pacific Time time zone.
 > 
