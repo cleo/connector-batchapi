@@ -1753,8 +1753,8 @@ public class BatchProcessor {
                     file.add(errorNode);
                 } else if (result.expanded().isArray()) {
                     if (csvMode) {
-                        ((ObjectNode)result.expanded().get(0))
-                            .set("csvdata", Json.mapper.valueToTree(result.line()));
+                        JsonNode line = Json.mapper.valueToTree(result.line());
+                        result.expanded().forEach(node -> ((ObjectNode)node).set("csvdata", line));
                     }
                     file.addAll((ArrayNode)result.expanded());
                 } else {
