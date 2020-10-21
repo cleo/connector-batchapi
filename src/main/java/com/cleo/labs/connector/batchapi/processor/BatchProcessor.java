@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 import com.cleo.labs.connector.batchapi.processor.template.CsvExpander;
 import com.cleo.labs.connector.batchapi.processor.template.TemplateExpander;
+import com.cleo.labs.connector.batchapi.processor.template.TemplateExpander.Expander;
 import com.cleo.labs.connector.batchapi.processor.versalex.StubVersaLex;
 import com.cleo.labs.connector.batchapi.processor.versalex.VersaLex;
 import com.fasterxml.jackson.core.JsonGenerator.Feature;
@@ -61,6 +62,7 @@ public class BatchProcessor {
     private String outputTemplate;
     private Path logOutput;
     private VersaLex versalex;
+    private boolean csvInput; // set to true if CSV input is found
 
     public BatchProcessor setExportPassword(String exportPassword) {
         this.exportPassword = exportPassword;
@@ -1706,10 +1708,9 @@ public class BatchProcessor {
         return expander;
     }
 
-    private ArrayNode prepareContent(String content) throws Exception {
+    private Expander prepareContent(String content) throws Exception {
         // load file content into a string
         TemplateExpander expander = setupTemplateExpander();
-        boolean csvMode = false;
 
         // Option 1: try to load it as a JSON or YAML file (unless --template)
         if (Strings.isNullOrEmpty(template)) {
@@ -1731,44 +1732,14 @@ public class BatchProcessor {
             try {
                 expander.loadCsv(content);
                 loadTemplate(expander);
-                csvMode = true;
+                csvInput = true;
             } catch (Exception e) {
                 throw new ProcessingException(e.getMessage());
             }
         }
 
-        // ok, something worked -- run the template
-        ArrayNode file = Json.mapper.createArrayNode();
-        try {
-            for (TemplateExpander.ExpanderResult result : expander.expand()) {
-                if (!result.success()) {
-                    ObjectNode errorNode = Json.mapper.createObjectNode();
-                    ObjectNode resultNode = errorNode.putObject("result");
-                    if (csvMode) {
-                        ObjectNode csvNode = resultNode.putObject("csv");
-                        csvNode.put("error", result.exception().getMessage());
-                        csvNode.put("line", result.lineNumber());
-                        csvNode.set("data", Json.mapper.valueToTree(result.line()));
-                    }
-                    file.add(errorNode);
-                } else if (result.expanded().isArray()) {
-                    if (csvMode) {
-                        JsonNode line = Json.mapper.valueToTree(result.line());
-                        result.expanded().forEach(node -> ((ObjectNode)node).set("csvdata", line));
-                    }
-                    file.addAll((ArrayNode)result.expanded());
-                } else {
-                    if (csvMode) {
-                        ((ObjectNode)result.expanded())
-                            .set("csvdata", Json.mapper.valueToTree(result.line()));
-                    }
-                    file.add(result.expanded());
-                }
-            }
-        } catch (Exception e) {
-            throw new ProcessingException(e.getMessage());
-        }
-        return file;
+        // ok, something worked -- return an iterator over the file
+        return expander.expand();
     }
 
     private ArrayNode results;
@@ -1789,7 +1760,7 @@ public class BatchProcessor {
      */
     public ArrayNode calculateResults() {
         //cleanup(results);
-        if (passwords.size() > 0) {
+        if (outputFormat != OutputFormat.csv && passwords.size() > 0) {
             results.add(passwordReport(passwords));
         }
         ArrayNode calculated = results;
@@ -1804,7 +1775,7 @@ public class BatchProcessor {
      * @param content the content of the file loaded into a String
      */
     public void processFile(String fn, String content) {
-        ArrayNode file;
+        Expander file;
         try {
             file = prepareContent(content);
         } catch (ProcessingException e) {
@@ -1815,16 +1786,43 @@ public class BatchProcessor {
             return;
         }
 
-        Iterator<JsonNode> elements = file.elements();
-        while (elements.hasNext()) {
+        List<JsonNode> requests = new ArrayList<>();
+        for (TemplateExpander.ExpanderResult result : file) {
+            if (!result.success()) {
+                ObjectNode errorNode = Json.mapper.createObjectNode();
+                ObjectNode resultNode = errorNode.putObject("result");
+                if (csvInput) {
+                    ObjectNode csvNode = resultNode.putObject("csv");
+                    csvNode.put("error", result.exception().getMessage());
+                    csvNode.put("line", result.lineNumber());
+                    csvNode.set("data", Json.mapper.valueToTree(result.line()));
+                }
+                results.add(errorNode);
+            } else {
+                requests.clear();
+                if (result.expanded().isArray()) {
+                    result.expanded().forEach(requests::add);
+                } else {
+                    requests.add(result.expanded());
+                }
+                if (csvInput) {
+                    JsonNode line = Json.mapper.valueToTree(result.line());
+                    requests.forEach(request -> ((ObjectNode)request).set("csvdata", line));
+                }
+                processRequests(requests);
+            }
+        }
+    }
+
+    private void processRequests(List<JsonNode> requests) {
+        for (JsonNode node : requests) {
             // pull the next element and make sure it's an object
-            JsonNode element = elements.next();
-            if (!element.isObject()) {
-                results.add(insertResult(Json.setSubElement(null, "result.request", element.toString()), false, "invalid request"));
+            if (!node.isObject()) {
+                results.add(insertResult(Json.setSubElement(null, "result.request", node.toString()), false, "invalid request"));
                 continue;
             }
             // process the request
-            ObjectNode original = (ObjectNode)element;
+            ObjectNode original = (ObjectNode)node;
             try {
                 Request request = analyzeRequest(original);
                 if (traceRequests) {
@@ -1966,6 +1964,7 @@ public class BatchProcessor {
         this.generatePasswords = false;
         this.outputFormat = OutputFormat.yaml;
         this.logOutput = null;
+        this.csvInput = false;
         loadVersaLex();
         reset();
     }
