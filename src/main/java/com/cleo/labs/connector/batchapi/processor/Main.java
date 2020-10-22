@@ -22,6 +22,7 @@ import com.cleo.labs.connector.batchapi.processor.BatchProcessor.OutputFormat;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 
 import lombok.Getter;
@@ -157,9 +158,8 @@ public class Main {
 
         options.addOption(Option.builder()
                 .longOpt("trace-requests")
-                .desc("include all default values when listing connections")
-                .required(false)
                 .desc("dump requests to stderr as a debugging aid")
+                .required(false)
                 .build());
 
         return options;
@@ -360,12 +360,15 @@ public class Main {
                         " only valid with outout-format of csv");
                 }
             }
+            if (cmd.hasOption("input") && cmd.getArgs().length > 0) {
+                throw new Exception("--input (-i) not allowed with command line input");
+            }
         } catch (Exception e) {
             System.err.println("Could not parse command line arguments: " + e.getMessage());
             System.exit(-1);
         }
 
-        if (cmd.hasOption("input")) {
+        if (cmd.hasOption("input") || cmd.getArgs().length > 0) {
             ApiClientFactory factory = null;
             if (operation != Operation.preview) {
                 try {
@@ -390,7 +393,11 @@ public class Main {
                     processor.setLogOutput(Paths.get(logFile));
                 }
             }
-            processor.processFiles(cmd.getOptionValues("input"), System.out);
+            if (cmd.getArgs().length > 0) {
+                processor.processFile("command line", Joiner.on('\n').join(cmd.getArgs()), System.out);
+            } else {
+                processor.processFiles(cmd.getOptionValues("input"), System.out);
+            }
             processor.close();
             System.exit(0); // RMI needs a kick in the pants to actually go away
         }
