@@ -24,6 +24,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.google.common.base.Strings;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+
 public class Main {
 
     private static Options getOptions() {
@@ -169,6 +173,15 @@ public class Main {
             formatter.printHelp("com.cleo.labs.connector.batchapi.processor.Main", getOptions());
             System.exit(0);
         }
+    }
+
+    @Getter @Setter @Accessors(chain = true)
+    public static class Profile {
+        private String url = null;
+        private String username = null;
+        private String password = null;
+        private boolean insecure = false;
+        private String exportPassword = null;
     }
 
     public static Profile loadProfile(String name, boolean quiet) {
@@ -377,7 +390,7 @@ public class Main {
                     processor.setLogOutput(Paths.get(logFile));
                 }
             }
-            processor.processFiles(cmd.getOptionValues("input"));
+            processor.processFiles(cmd.getOptionValues("input"), System.out);
             processor.close();
             System.exit(0); // RMI needs a kick in the pants to actually go away
         }
