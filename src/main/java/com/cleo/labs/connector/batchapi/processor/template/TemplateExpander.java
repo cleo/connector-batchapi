@@ -702,4 +702,8 @@ public class TemplateExpander {
     public Expander expand() {
         return new Expander();
     }
+
+    public static Expander emptyExpander() {
+        return new TemplateExpander(null).jsondata(Json.mapper.createArrayNode()).new Expander();
+    }
 }

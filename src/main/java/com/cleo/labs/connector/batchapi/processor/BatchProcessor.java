@@ -1773,17 +1773,16 @@ public class BatchProcessor {
      * The {@code fn} is included only for error reporting.
      * @param fn the name of the file to use for error reporting
      * @param content the content of the file loaded into a String
+     * @param out where to write the output
      */
-    public void processFile(String fn, String content) {
-        Expander file;
+    public void processFile(String fn, String content, PrintStream out) throws IOException {
+        Expander file = TemplateExpander.emptyExpander();
         try {
             file = prepareContent(content);
         } catch (ProcessingException e) {
             results.add(insertResult(Json.setSubElement(null, "result.file", fn), false, e.getMessage()));
-            return;
         } catch (Exception e) {
             results.add(insertResult(Json.setSubElement(null, "result.file", fn), false, e));
-            return;
         }
 
         List<JsonNode> requests = new ArrayList<>();
@@ -1812,6 +1811,8 @@ public class BatchProcessor {
                 processRequests(requests);
             }
         }
+
+        formatOutput(out);
     }
 
     private void processRequests(List<JsonNode> requests) {
@@ -1895,7 +1896,7 @@ public class BatchProcessor {
         }
     }
 
-    public void formatOutput(PrintStream out) throws IOException {
+    private void formatOutput(PrintStream out) throws IOException {
         ArrayNode output = calculateResults();
         switch (outputFormat) {
         case yaml:
@@ -1938,16 +1939,16 @@ public class BatchProcessor {
      * understood to mean "read the standard input"&mdash;use {@code ./-}
      * to process a file named {@code -}.
      * @param fns the filenames to process
+     * @param out where to write the output
      * @throws IOException
      */
-    public void processFiles(String[] fns) throws IOException {
+    public void processFiles(String[] fns, PrintStream out) throws IOException {
         for (String fn : fns) {
             String content = fn.equals("-")
                     ? new String(ByteStreams.toByteArray(System.in))
                     : new String(Files.readAllBytes(Paths.get(fn)));
-            processFile(fn, content);
+            processFile(fn, content, out);
         }
-        formatOutput(System.out);
     }
 
     /**

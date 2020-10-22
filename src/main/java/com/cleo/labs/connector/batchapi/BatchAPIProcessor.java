@@ -105,9 +105,8 @@ public class BatchAPIProcessor extends FilterOutputStream {
         } catch (ConnectorPropertyException ignore) {}
 
         String content = bytes.toString();
-        processor.processFile(path.getFileName().toString(), content);
         try (PrintStream out = new PrintStream(outputFile.toFile())) {
-            processor.formatOutput(out);
+            processor.processFile(path.getFileName().toString(), content, out);
         }
     }
 
