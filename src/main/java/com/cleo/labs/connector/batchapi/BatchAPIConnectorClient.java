@@ -48,15 +48,15 @@ public class BatchAPIConnectorClient extends ConnectorClient {
 
         logger.debug(String.format("PUT local '%s' to remote '%s'", source.getPath(), destination));
 
-        BatchAPIProcessor processor = new BatchAPIProcessor(
-                config,
-                config.getWorkingDirectory().resolve(destination),
-                source.getMetadata(),
-                logger);
         try {
+            BatchAPIProcessor processor = new BatchAPIProcessor(
+                    config,
+                    config.getWorkingDirectory().resolve(destination),
+                    source.getMetadata(),
+                    logger);
             transfer(source.getStream(), processor, false);
-        } catch (IOException e) {
-            throw new ConnectorException(e);
+        } catch (Exception e) {
+            return new ConnectorCommandResult(Status.Error, "Put failed.", e);
         }
 
         return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
@@ -68,13 +68,16 @@ public class BatchAPIConnectorClient extends ConnectorClient {
         IConnectorIncoming destination = get.getDestination();
         logger.debug(String.format("GET remote '%s' to local '%s'", source, destination.getPath()));
 
-        Path path = config.getWorkingDirectory().resolve(source);
-        if (!path.toFile().exists()) {
-          throw new ConnectorException(String.format("'%s' does not exist or is not accessible", path.toString()),
-                  ConnectorException.Category.fileNonExistentOrNoAccess);
+        try {
+            Path path = config.getWorkingDirectory().resolve(source);
+            if (!path.toFile().exists()) {
+              throw new ConnectorException(String.format("'%s' does not exist or is not accessible", path.toString()),
+                      ConnectorException.Category.fileNonExistentOrNoAccess);
+            }
+            transfer(new FileInputStream(path.toFile()), destination.getStream(), true);
+        } catch (Exception e) {
+            return new ConnectorCommandResult(Status.Error, "Get failed.", e);
         }
-
-        transfer(new FileInputStream(path.toFile()), destination.getStream(), true);
 
         return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
     }
@@ -84,17 +87,21 @@ public class BatchAPIConnectorClient extends ConnectorClient {
         String relativepath = delete.getSource();
         logger.debug(String.format("DELETE '%s'", relativepath));
 
-        Path path = config.getWorkingDirectory().resolve(relativepath);
-        File file = path.toFile();
-        if (!file.exists()) {
-            throw new ConnectorException(String.format("'%s' does not exist or is not accessible", relativepath),
-                    ConnectorException.Category.fileNonExistentOrNoAccess);
-        } else if (!file.isFile()) {
-            return new ConnectorCommandResult(Status.Error, String.format("'%s' is not a file", relativepath));
-        } else if (!file.delete()) {
-            return new ConnectorCommandResult(Status.Error, "Delete failed.");
-        } else {
-            return new ConnectorCommandResult(Status.Success);
+        try {
+            Path path = config.getWorkingDirectory().resolve(relativepath);
+            File file = path.toFile();
+            if (!file.exists()) {
+                throw new ConnectorException(String.format("'%s' does not exist or is not accessible", relativepath),
+                        ConnectorException.Category.fileNonExistentOrNoAccess);
+            } else if (!file.isFile()) {
+                return new ConnectorCommandResult(Status.Error, String.format("'%s' is not a file", relativepath));
+            } else if (!file.delete()) {
+                return new ConnectorCommandResult(Status.Error, "Delete failed.");
+            } else {
+                return new ConnectorCommandResult(Status.Success);
+            }
+        } catch (Exception e) {
+            return new ConnectorCommandResult(Status.Error, "Delete failed.", e);
         }
     }
 
@@ -104,15 +111,19 @@ public class BatchAPIConnectorClient extends ConnectorClient {
         String relativedestination = rename.getDestination();
         logger.debug(String.format("RENAME '%s' '%s'", relativesource, relativedestination));
 
-        Path path = config.getWorkingDirectory().resolve(relativesource);
-        File file = path.toFile();
-        if (!file.exists()) {
-            throw new ConnectorException(String.format("'%s' does not exist or is not accessible", file.getPath()),
-                    ConnectorException.Category.fileNonExistentOrNoAccess);
-        } else if (!file.renameTo(config.getWorkingDirectory().resolve(relativedestination).toFile())) {
-            return new ConnectorCommandResult(Status.Error, "Rename failed.");
-        } else {
-            return new ConnectorCommandResult(Status.Success);
+        try {
+            Path path = config.getWorkingDirectory().resolve(relativesource);
+            File file = path.toFile();
+            if (!file.exists()) {
+                throw new ConnectorException(String.format("'%s' does not exist or is not accessible", file.getPath()),
+                        ConnectorException.Category.fileNonExistentOrNoAccess);
+            } else if (!file.renameTo(config.getWorkingDirectory().resolve(relativedestination).toFile())) {
+                return new ConnectorCommandResult(Status.Error, "Rename failed.");
+            } else {
+                return new ConnectorCommandResult(Status.Success);
+            }
+        } catch (Exception e) {
+            return new ConnectorCommandResult(Status.Error, "Rename failed.", e);
         }
     }
 
@@ -121,20 +132,23 @@ public class BatchAPIConnectorClient extends ConnectorClient {
         String relativepath = dir.getSource().getPath();
         logger.debug(String.format("DIR '%s'", relativepath));
 
-        Path path = config.getWorkingDirectory().resolve(relativepath);
-        List<Entry> result = new ArrayList<>();
-        File[] files = path.toFile().listFiles();
-        if (files != null) {
-            for (File file : files) {
-                Entry entry = new Entry(file.isFile() ? Type.file : Type.dir);
-                entry.setPath(Paths.get(relativepath, file.getName()).toString());
-                entry.setDate(Attributes.toLocalDateTime(file.lastModified()));
-                entry.setSize(file.isFile() ? file.length() : -1L);
-                result.add(entry);
+        try {
+            Path path = config.getWorkingDirectory().resolve(relativepath);
+            List<Entry> result = new ArrayList<>();
+            File[] files = path.toFile().listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    Entry entry = new Entry(file.isFile() ? Type.file : Type.dir);
+                    entry.setPath(Paths.get(relativepath, file.getName()).toString());
+                    entry.setDate(Attributes.toLocalDateTime(file.lastModified()));
+                    entry.setSize(file.isFile() ? file.length() : -1L);
+                    result.add(entry);
+                }
             }
+            return new ConnectorCommandResult(ConnectorCommandResult.Status.Success, Optional.empty(), result);
+        } catch (Exception e) {
+            return new ConnectorCommandResult(Status.Error, "Dir failed.", e);
         }
-
-        return new ConnectorCommandResult(ConnectorCommandResult.Status.Success, Optional.empty(), result);
     }
 
     /**
@@ -147,7 +161,11 @@ public class BatchAPIConnectorClient extends ConnectorClient {
      */
     @Command(name = ATTR)
     public BasicFileAttributeView getAttributes(String path) throws ConnectorException, IOException {
-        return new ActualFileAttributes(config.getWorkingDirectory().resolve(path));
+        try {
+            return new ActualFileAttributes(config.getWorkingDirectory().resolve(path));
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
     }
 
 }

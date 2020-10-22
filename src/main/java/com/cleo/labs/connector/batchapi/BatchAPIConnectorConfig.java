@@ -7,6 +7,8 @@ import com.cleo.connector.api.interfaces.ConnectorBase;
 import com.cleo.connector.api.property.ConnectorPropertyException;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.Operation;
 import com.cleo.labs.connector.batchapi.processor.BatchProcessor.OutputFormat;
+import com.cleo.lexicom.beans.MacroReplacement;
+import com.cleo.util.MacroUtil;
 import com.google.common.base.Strings;
 
 public class BatchAPIConnectorConfig {
@@ -18,8 +20,10 @@ public class BatchAPIConnectorConfig {
         this.schema = schema;
     }
 
-    public Path getWorkingDirectory() throws ConnectorPropertyException {
-        return Paths.get(schema.workingDirectory.getValue(client));
+    public Path getWorkingDirectory() throws Exception {
+        String value = schema.workingDirectory.getValue(client);
+        String macros = new MacroReplacement().replaceMacrosInString(value, MacroUtil.DIRS_ONLY, true);
+        return Paths.get(macros);
     }
 
     public Profile[] getProfiles() throws ConnectorPropertyException {
