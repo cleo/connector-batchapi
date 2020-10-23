@@ -1,13 +1,17 @@
 package com.cleo.labs.connector.batchapi.processor.template;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 import org.junit.Test;
 
+import com.cleo.labs.connector.batchapi.processor.BatchProcessor.ResultWriter;
 import com.cleo.labs.connector.batchapi.processor.Json;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class TestCsvExpander {
 
@@ -39,12 +43,18 @@ public class TestCsvExpander {
             "  group: Users\n"+
             "";
         CsvExpander expander = new CsvExpander()
-                .template(template)
-                .data(results);
+                .template(template);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        expander.writeTo(out);
-        System.out.println("more lines");
-        
+        ResultWriter writer = expander.getWriter(new PrintStream(out), null);
+        for (JsonNode node : results) {
+            writer.write((ObjectNode)node);
+        }
+        writer.close();
+        out.write("more lines\n".getBytes());
+        assertEquals("user,email,password,group\n"
+                + "demo1,demo1@cleo.demo,secret1,Users\n"
+                + "demo2,demo2@cleo.demo,secret2,Users\n"
+                + "more lines\n", new String(out.toByteArray()));
     }
 
 }

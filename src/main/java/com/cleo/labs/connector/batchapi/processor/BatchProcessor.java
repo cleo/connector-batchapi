@@ -24,6 +24,7 @@ import com.cleo.labs.connector.batchapi.processor.versalex.VersaLex;
 import com.fasterxml.jackson.core.JsonGenerator.Feature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SequenceWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -378,9 +379,8 @@ public class BatchProcessor {
         add.actions = (ObjectNode)add.entry.remove("actions");
 
         // now delete the original
-        api.delete(original);
-        // and add the update
-        ArrayNode tempResults = Json.mapper.createArrayNode();
+        api.delete(original); // and add the update
+        List<ObjectNode> tempResults = new ArrayList<>();
         ArrayNode tempPasswords = Json.mapper.createArrayNode();
         processAddUser(add, tempResults, tempPasswords);
         return (ObjectNode)tempResults.get(0);
@@ -1111,7 +1111,7 @@ public class BatchProcessor {
         return result;
     }
 
-    private ObjectNode passwordReport(ArrayNode passwords) {
+    private List<ObjectNode> passwordReport(ArrayNode passwords) {
         // create an object like:
         //   result:
         //     status: success
@@ -1121,14 +1121,18 @@ public class BatchProcessor {
         //       username: username
         //       email: email
         //       password: encrypted password
-        ObjectNode report = insertResult(Json.mapper.createObjectNode(), true, "added passwords");
-        Json.setSubElement(report, "result.passwords", passwords);
-        return report;
+        if (outputFormat != OutputFormat.csv && passwords.size() > 0) {
+            ObjectNode report = insertResult(Json.mapper.createObjectNode(), true, "added passwords");
+            Json.setSubElement(report, "result.passwords", passwords);
+            return Collections.singletonList(report);
+        } else {
+            return Collections.emptyList();
+        }
     }
 
 	/*- add processors -------------------------------------------------------*/
 
-    private void processAddUser(Request request, ArrayNode results, ArrayNode passwords) throws Exception {
+    private void processAddUser(Request request, List<ObjectNode> results, ArrayNode passwords) throws Exception {
         // get or create the authenticator identified by "authenticator"
         String alias = Json.getSubElementAsText(request.entry, "authenticator");
         if (alias == null) {
@@ -1174,7 +1178,7 @@ public class BatchProcessor {
         results.add(insertResult(userOfficial2Batch(officialResult), true, "created "+request.resource, request));
     }
 
-    private void processAddAuthenticator(Request request, ArrayNode results) throws Exception {
+    private void processAddAuthenticator(Request request, List<ObjectNode> results) throws Exception {
         ObjectNode officialRequest = authenticatorBatch2Official(request.entry);
         ObjectNode officialResult = api.createAuthenticator(officialRequest);
         if (officialResult == null) {
@@ -1186,7 +1190,7 @@ public class BatchProcessor {
         results.add(insertResult(authenticatorOfficial2Batch(officialResult), true, "created "+request.resource, request));
     }
 
-    private void processAddConnection(Request request, ArrayNode results) throws Exception {
+    private void processAddConnection(Request request, List<ObjectNode> results) throws Exception {
         ObjectNode officialRequest = connectionBatch2Official(request.entry);
         // decrypt the password if it's encrypted
         String password = OpenSSLCrypt.decrypt(exportPassword,
@@ -1210,13 +1214,13 @@ public class BatchProcessor {
         results.add(insertResult(batchResult, true, "created "+request.resource, request));
     }
 
-    private void processAddAction(Request request, ArrayNode results) throws Exception {
+    private void processAddAction(Request request, List<ObjectNode> results) throws Exception {
         if (request.actionFilter != null) {
             throw new ProcessingException("actionFilter not allowed for add");
         }
         String alias = request.action;
         request.action = null;
-        ArrayNode tempResults = Json.mapper.createArrayNode();
+        List<ObjectNode> tempResults = new ArrayList<>();
         List<ObjectNode> parents = processList(request, tempResults);
         if (parents.size() == 0) {
             throw new ProcessingException("parent object not found while adding action");
@@ -1227,10 +1231,10 @@ public class BatchProcessor {
         ObjectNode actions = Json.mapper.createObjectNode();
         actions.set(alias, request.entry);
         actions = createActions(actions, parent);
-        results.add(actions.get(alias));
+        results.add((ObjectNode)actions.get(alias));
     }
 
-    private void processAdd(Request request, ArrayNode results, ArrayNode passwords) throws Exception {
+    private void processAdd(Request request, List<ObjectNode> results, ArrayNode passwords) throws Exception {
         if (request.action != null || request.actionFilter != null) {
             processAddAction(request, results);
             return;
@@ -1265,7 +1269,7 @@ public class BatchProcessor {
      * @param results where results are appended
      * @throws Exception
      */
-    private void processUpdate(Request request, ArrayNode results) throws Exception {
+    private void processUpdate(Request request, List<ObjectNode> results) throws Exception {
         // let update hold the update request (request.entry will be the query)
         ObjectNode update = request.entry.deepCopy();
         ObjectNode renames = (ObjectNode)update.remove("update");
@@ -1277,7 +1281,7 @@ public class BatchProcessor {
         }
 
         // run the query
-        ArrayNode tempResults = Json.mapper.createArrayNode();
+        List<ObjectNode> tempResults = new ArrayList<>();
         List<ObjectNode> toUpdate;
         toUpdate = processList(request, tempResults);
 
@@ -1306,7 +1310,7 @@ public class BatchProcessor {
 
 	/*- list processors ------------------------------------------------------*/
 
-    private List<ObjectNode> processListUser(Request request, ArrayNode results) throws Exception {
+    private List<ObjectNode> processListUser(Request request, List<ObjectNode> results) throws Exception {
         List<ObjectNode> list;
         list = listUsers(request);
         int i = 1;
@@ -1322,7 +1326,7 @@ public class BatchProcessor {
         return list;
     }
 
-    private List<ObjectNode> processListAuthenticator(Request request, ArrayNode results, boolean includeUsers) throws Exception {
+    private List<ObjectNode> processListAuthenticator(Request request, List<ObjectNode> results, boolean includeUsers) throws Exception {
         List<ObjectNode> list = listAuthenticators(request, includeUsers);
         int i = 1;
         for (ObjectNode authenticator : list) {
@@ -1352,7 +1356,7 @@ public class BatchProcessor {
         return list;
     }
 
-    private List<ObjectNode> processListConnection(Request request, ArrayNode results) throws Exception {
+    private List<ObjectNode> processListConnection(Request request, List<ObjectNode> results) throws Exception {
         List<ObjectNode> list = listConnections(request);
         int i = 1;
         for (ObjectNode connection : list) {
@@ -1375,7 +1379,7 @@ public class BatchProcessor {
      * @return List of Official form actions
      * @throws Exception
      */
-    private List<ObjectNode> processListActions(Request request, ArrayNode results) throws Exception {
+    private List<ObjectNode> processListActions(Request request, List<ObjectNode> results) throws Exception {
         List<ObjectNode> list;
         if (request.resource != null && request.resourceClass == ResourceClass.any ||
                 request.resourceFilter != null) {
@@ -1385,7 +1389,7 @@ public class BatchProcessor {
             String actionFilter = request.actionFilter;
             request.action = null;
             request.actionFilter = null;
-            ArrayNode tempResults = Json.mapper.createArrayNode();
+            List<ObjectNode> tempResults = new ArrayList<>();
             for (ObjectNode resource : processList(request, tempResults)) {
                 Request inner = new Request();
                 inner.operation = request.operation;
@@ -1419,7 +1423,7 @@ public class BatchProcessor {
      * @return List of Official form actions
      * @throws Exception
      */
-    private List<ObjectNode> processList(Request request, ArrayNode results) throws Exception {
+    private List<ObjectNode> processList(Request request, List<ObjectNode> results) throws Exception {
         if (request.action != null || request.actionFilter != null) {
             return processListActions(request, results);
         }
@@ -1454,15 +1458,15 @@ public class BatchProcessor {
         }
     }
 
-    private void appendAndFlattenUsers(JsonNode tempResult, ArrayNode results) {
-        results.add(tempResult);
+    private void appendAndFlattenUsers(JsonNode tempResult, List<ObjectNode> results) {
+        results.add((ObjectNode)tempResult);
         ArrayNode users = (ArrayNode)((ObjectNode)tempResult).remove(USERSTOKEN);
         if (users != null && !users.isEmpty()) {
-            users.forEach(results::add);
+            users.forEach(u -> results.add((ObjectNode)u));
         }
     }
 
-    private void appendAndFlattenUsers(ArrayNode tempResults, ArrayNode results) {
+    private void appendAndFlattenUsers(List<ObjectNode> tempResults, List<ObjectNode> results) {
         if (tempResults != null && !tempResults.isEmpty()) {
             tempResults.forEach(tempResult -> appendAndFlattenUsers(tempResult, results));
         }
@@ -1742,30 +1746,13 @@ public class BatchProcessor {
         return expander.expand();
     }
 
-    private ArrayNode results;
     private ArrayNode passwords;
 
     /**
      * Resets the processing state for a new run.
      */
     public void reset() {
-        results = Json.mapper.createArrayNode();
         passwords = Json.mapper.createArrayNode();
-    }
-
-    /**
-     * Cleans up and returns the results, resetting the processing
-     * state for a new run.
-     * @return the cleaned up results ready for printing
-     */
-    public ArrayNode calculateResults() {
-        //cleanup(results);
-        if (outputFormat != OutputFormat.csv && passwords.size() > 0) {
-            results.add(passwordReport(passwords));
-        }
-        ArrayNode calculated = results;
-        reset();
-        return calculated;
     }
 
     /**
@@ -1776,54 +1763,62 @@ public class BatchProcessor {
      * @param out where to write the output
      */
     public void processFile(String fn, String content, PrintStream out) throws IOException {
+        ResultWriter writer = getWriter(out);
         Expander file = TemplateExpander.emptyExpander();
         try {
             file = prepareContent(content);
         } catch (ProcessingException e) {
-            results.add(insertResult(Json.setSubElement(null, "result.file", fn), false, e.getMessage()));
+            writer.write(insertResult(Json.setSubElement(null, "result.file", fn), false, e.getMessage()));
+            return;
         } catch (Exception e) {
-            results.add(insertResult(Json.setSubElement(null, "result.file", fn), false, e));
+            writer.write(insertResult(Json.setSubElement(null, "result.file", fn), false, e));
         }
 
-        List<JsonNode> requests = new ArrayList<>();
-        for (TemplateExpander.ExpanderResult result : file) {
-            if (!result.success()) {
+        for (TemplateExpander.ExpanderResult expanded : file) {
+            if (!expanded.success()) {
                 ObjectNode errorNode = Json.mapper.createObjectNode();
                 ObjectNode resultNode = errorNode.putObject("result");
                 if (csvInput) {
                     ObjectNode csvNode = resultNode.putObject("csv");
-                    csvNode.put("error", result.exception().getMessage());
-                    csvNode.put("line", result.lineNumber());
-                    csvNode.set("data", Json.mapper.valueToTree(result.line()));
+                    csvNode.put("error", expanded.exception().getMessage());
+                    csvNode.put("line", expanded.lineNumber());
+                    csvNode.set("data", Json.mapper.valueToTree(expanded.line()));
                 }
-                results.add(errorNode);
+                writer.write(errorNode);
             } else {
-                requests.clear();
-                if (result.expanded().isArray()) {
-                    result.expanded().forEach(requests::add);
+                List<JsonNode> requests = new ArrayList<>();
+                if (expanded.expanded().isArray()) {
+                    expanded.expanded().forEach(requests::add);
                 } else {
-                    requests.add(result.expanded());
+                    requests.add(expanded.expanded());
                 }
                 if (csvInput) {
-                    JsonNode line = Json.mapper.valueToTree(result.line());
+                    JsonNode line = Json.mapper.valueToTree(expanded.line());
                     requests.forEach(request -> ((ObjectNode)request).set("csvdata", line));
                 }
-                processRequests(requests);
+                for (JsonNode request : requests) {
+                    for (ObjectNode processed : processRequest(request)) {
+                        writer.write(processed);
+                    }
+                }
             }
         }
 
-        formatOutput(out);
+        for (ObjectNode result : passwordReport(passwords)) {
+            writer.write(result);
+        }
+        writer.close();
+        reset();
     }
 
-    private void processRequests(List<JsonNode> requests) {
-        for (JsonNode node : requests) {
-            // pull the next element and make sure it's an object
-            if (!node.isObject()) {
-                results.add(insertResult(Json.setSubElement(null, "result.request", node.toString()), false, "invalid request"));
-                continue;
-            }
+    private List<ObjectNode> processRequest(JsonNode requestNode) {
+        List<ObjectNode> results = new ArrayList<>();
+        // pull the next element and make sure it's an object
+        if (!requestNode.isObject()) {
+            results.add(insertResult(Json.setSubElement(null, "result.request", requestNode.toString()), false, "invalid request"));
+        } else {
             // process the request
-            ObjectNode original = (ObjectNode)node;
+            ObjectNode original = (ObjectNode)requestNode;
             try {
                 Request request = analyzeRequest(original);
                 if (traceRequests) {
@@ -1833,103 +1828,128 @@ public class BatchProcessor {
                 if (request.entry.isEmpty() &&
                         (request.operation==Operation.add || request.operation==Operation.update)) {
                     results.add(Json.setSubElement(original, "result.message", "empty request"));
-                    continue;
-                }
-                switch (request.operation) {
-                case preview:
-                    results.add(insertResult(original, true, "request preview", request));
-                    break;
-                case add:
-                    processAdd(request, results, passwords);
-                    break;
-                case list:
-                    {
-                        ArrayNode tempResults = Json.mapper.createArrayNode();
-                        processList(request, tempResults);
-                        appendAndFlattenUsers(tempResults, results);
-                    }
-                    break;
-                case update:
-                    processUpdate(request, results);
-                    break;
-                case delete:
-                    {
-                        ArrayNode tempResults = Json.mapper.createArrayNode();
-                        List<ObjectNode> toDelete = processList(request, tempResults);
-                        for (int i=0; i<toDelete.size(); i++) {
-                            try {
-                                api.delete(toDelete.get(i));
-                                appendAndFlattenUsers(tempResults.get(i), results);
-                            } catch (Exception e) {
-                                results.add(insertResult(toDelete.get(i), false, e));
-                            }
+                } else {
+                    switch (request.operation) {
+                    case preview:
+                        results.add(insertResult(original, true, "request preview", request));
+                        break;
+                    case add:
+                        processAdd(request, results, passwords);
+                        break;
+                    case list:
+                        {
+                            List<ObjectNode> tempResults = new ArrayList<>();
+                            processList(request, tempResults);
+                            appendAndFlattenUsers(tempResults, results);
                         }
-                    }
-                    break;
-                case run:
-                    {
-                        ArrayNode tempResults = Json.mapper.createArrayNode();
-                        List<ObjectNode> toRun = processListActions(request, tempResults);
-                        for (int i=0; i<toRun.size(); i++) {
-                            try {
-                                ObjectNode action = toRun.get(i);
-                                ObjectNode output = api.runAction(action, request.entry);
-                                String message = "ran action "+Json.getSubElementAsText(action, "alias");
-                                if (toRun.size() > 1) {
-                                    message += String.format(" (%d of %d)", i+1, toRun.size());
+                        break;
+                    case update:
+                        processUpdate(request, results);
+                        break;
+                    case delete:
+                        {
+                            List<ObjectNode> tempResults = new ArrayList<>();
+                            List<ObjectNode> toDelete = processList(request, tempResults);
+                            for (int i=0; i<toDelete.size(); i++) {
+                                try {
+                                    api.delete(toDelete.get(i));
+                                    appendAndFlattenUsers(tempResults.get(i), results);
+                                } catch (Exception e) {
+                                    results.add(insertResult(toDelete.get(i), false, e));
                                 }
-                                ObjectNode report = Json.mapper.createObjectNode();
-                                report.set("output", output);
-                                results.add(insertResult(report, true, message, request));
-                            } catch (Exception e) {
-                                results.add(insertResult(toRun.get(i), false, e));
                             }
                         }
+                        break;
+                    case run:
+                        {
+                            List<ObjectNode> tempResults = new ArrayList<>();
+                            List<ObjectNode> toRun = processListActions(request, tempResults);
+                            for (int i=0; i<toRun.size(); i++) {
+                                try {
+                                    ObjectNode action = toRun.get(i);
+                                    ObjectNode output = api.runAction(action, request.entry);
+                                    String message = "ran action "+Json.getSubElementAsText(action, "alias");
+                                    if (toRun.size() > 1) {
+                                        message += String.format(" (%d of %d)", i+1, toRun.size());
+                                    }
+                                    ObjectNode report = Json.mapper.createObjectNode();
+                                    report.set("output", output);
+                                    results.add(insertResult(report, true, message, request));
+                                } catch (Exception e) {
+                                    results.add(insertResult(toRun.get(i), false, e));
+                                }
+                            }
+                        }
+                        break;
+                    default:
+                        throw new ProcessingException("operation "+request.operation+" not supported");
                     }
-                    break;
-                default:
-                    throw new ProcessingException("operation "+request.operation+" not supported");
                 }
             } catch (Exception e) {
                 results.add(insertResult(original, false, e));
             }
         }
+        return results;
     }
 
-    private void formatOutput(PrintStream out) throws IOException {
-        ArrayNode output = calculateResults();
-        switch (outputFormat) {
-        case yaml:
-            Json.mapper.writeValue(out, output);
-            break;
-        case json:
-            new ObjectMapper()
+    public interface ResultWriter {
+        public void write(ObjectNode result) throws IOException;
+        public void close() throws IOException;
+    }
+
+    private static class YamlWriter implements ResultWriter {
+        private SequenceWriter seq;
+        public YamlWriter(PrintStream out) throws IOException {
+            this.seq = Json.mapper.writer().writeValuesAsArray(out);
+        }
+        @Override
+        public void write(ObjectNode result) throws IOException {
+            seq.write(result);
+        };
+        @Override
+        public void close() throws IOException {
+            seq.close();
+        }
+    }
+
+    private static class JsonWriter implements ResultWriter {
+        private PrintStream out;
+        private SequenceWriter seq;
+        public JsonWriter(PrintStream out) throws IOException {
+            this.out = out;
+            this.seq = new ObjectMapper()
                 .configure(SerializationFeature.INDENT_OUTPUT, true)
                 .configure(Feature.AUTO_CLOSE_TARGET, false)
-                .writeValue(out, output);
+                .writer()
+                .writeValuesAsArray(out);
+        }
+        @Override
+        public void write(ObjectNode result) throws IOException {
+            seq.write(result);
+        };
+        @Override
+        public void close() throws IOException {
+            seq.close();
             out.println();
-            break;
+        }
+    }
+
+    private ResultWriter getWriter(PrintStream out) throws IOException {
+        switch (outputFormat) {
+        case yaml:
+            return new YamlWriter(out);
+        case json:
+            return new JsonWriter(out);
         case csv:
-            IOException savedException = null;
+            YamlWriter log = null;
             if (logOutput != null) {
-                try {
-                    Json.mapper.writeValue(logOutput.toFile(), output);
-                } catch (IOException e) {
-                    savedException = e;
-                }
+                log = new YamlWriter(new PrintStream(logOutput.toFile()));
             }
-            try {
-                new CsvExpander()
+            return new CsvExpander()
                     .template(outputTemplate)
-                    .data(output)
-                    .writeTo(out);
-            } catch (Exception e) {
-                throw new IOException(e);
-            }
-            if (savedException != null) {
-                throw savedException;
-            }
-            break;
+                    .getWriter(out, log);
+        default:
+            return null; // can't happen
         }
     }
 

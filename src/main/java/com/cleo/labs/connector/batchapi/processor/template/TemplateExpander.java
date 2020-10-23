@@ -6,6 +6,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,7 @@ public class TemplateExpander {
     private MacroEngine engine;
     private JsonNode template;
     private List<Map<String,String>> data;
-    private ArrayNode jsondata;
+    private List<ObjectNode> jsondata;
 
     /*-- constructors --------------------------------------------------------*/
 
@@ -167,7 +168,7 @@ public class TemplateExpander {
      * @param jsondata the source of template data
      * @return {@code this} for fluent style setup
      */
-    public TemplateExpander jsondata(ArrayNode jsondata) {
+    public TemplateExpander jsondata(List<ObjectNode> jsondata) {
         this.jsondata = jsondata;
         return this;
     }
@@ -643,7 +644,7 @@ public class TemplateExpander {
 
     public class Expander implements Iterator<ExpanderResult>, Iterable<ExpanderResult> {
         private Iterator<Map<String,String>> dataIterator;
-        private Iterator<JsonNode> jsonIterator;
+        private Iterator<ObjectNode> jsonIterator;
         private int lineNumber;
 
         public Expander() {
@@ -653,7 +654,7 @@ public class TemplateExpander {
                 lineNumber = 1; // start at 1 to count the header line
             } else {
                 dataIterator = null;
-                jsonIterator = jsondata.elements();
+                jsonIterator = jsondata.iterator();
                 lineNumber = 0;
             }
         }
@@ -704,6 +705,6 @@ public class TemplateExpander {
     }
 
     public static Expander emptyExpander() {
-        return new TemplateExpander(null).jsondata(Json.mapper.createArrayNode()).new Expander();
+        return new TemplateExpander(null).jsondata(Collections.emptyList()).new Expander();
     }
 }
