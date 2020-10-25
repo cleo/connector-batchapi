@@ -1746,15 +1746,6 @@ public class BatchProcessor {
         return expander.expand();
     }
 
-    private ArrayNode passwords;
-
-    /**
-     * Resets the processing state for a new run.
-     */
-    public void reset() {
-        passwords = Json.mapper.createArrayNode();
-    }
-
     /**
      * The main file processor. Load the file into {@code content} before calling.
      * The {@code fn} is included only for error reporting.
@@ -1765,6 +1756,7 @@ public class BatchProcessor {
     public void processFile(String fn, String content, PrintStream out) throws IOException {
         ResultWriter writer = getWriter(out);
         Expander file = TemplateExpander.emptyExpander();
+        ArrayNode passwords = Json.mapper.createArrayNode();
         try {
             file = prepareContent(content);
         } catch (ProcessingException e) {
@@ -1797,7 +1789,7 @@ public class BatchProcessor {
                     requests.forEach(request -> ((ObjectNode)request).set("csvdata", line));
                 }
                 for (JsonNode request : requests) {
-                    for (ObjectNode processed : processRequest(request)) {
+                    for (ObjectNode processed : processRequest(request, passwords)) {
                         writer.write(processed);
                     }
                 }
@@ -1808,10 +1800,9 @@ public class BatchProcessor {
             writer.write(result);
         }
         writer.close();
-        reset();
     }
 
-    private List<ObjectNode> processRequest(JsonNode requestNode) {
+    private List<ObjectNode> processRequest(JsonNode requestNode, ArrayNode passwords) {
         List<ObjectNode> results = new ArrayList<>();
         // pull the next element and make sure it's an object
         if (!requestNode.isObject()) {
@@ -1987,6 +1978,5 @@ public class BatchProcessor {
         this.logOutput = null;
         this.csvInput = false;
         loadVersaLex();
-        reset();
     }
 }
