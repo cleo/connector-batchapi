@@ -53,11 +53,14 @@ public class ApiClient {
     private boolean includeDefaults;
     private boolean traceRequests;
 
+    private HttpClient httpClient = null;
+
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 
     public ApiClient(String url, String username, String password, boolean insecure) throws Exception {
         this.baseUrl = url;
         this.insecure = insecure;
+        this.httpClient = getHttpClient();
         this.authToken = authorize(username, password);
         this.includeDefaults = false;
         this.traceRequests = false;
@@ -73,10 +76,8 @@ public class ApiClient {
         return this;
     }
 
-    private static HttpClient defaultHTTPClient = null;
-
-    private HttpClient getDefaultHTTPClient() {
-        if (defaultHTTPClient == null) {
+    private HttpClient getHttpClient() {
+        if (httpClient == null) {
             HttpClientBuilder builder = HttpClients.custom()
                     .setDefaultRequestConfig(RequestConfig.custom().setCookieSpec(CookieSpecs.STANDARD).build());
             if (insecure) {
@@ -88,9 +89,9 @@ public class ApiClient {
                     System.err.println("warning: "+e.getMessage());
                 }
             }
-            defaultHTTPClient = builder.build();
+            httpClient = builder.build();
         }
-        return defaultHTTPClient;
+        return httpClient;
     }
 
     /*------------------------------------------------------------------------*
@@ -112,12 +113,11 @@ public class ApiClient {
      *------------------------------------------------------------------------*/
 
     private ObjectNode execute(HttpRequestBase request, int successCode) throws Exception {
-        HttpClient client = getDefaultHTTPClient();
         if (this.authToken != null) {
             request.addHeader("Authorization", "Bearer " + this.authToken);
         }
         try {
-            HttpResponse response = client.execute(request);
+            HttpResponse response = httpClient.execute(request);
             int code = response.getStatusLine().getStatusCode();
             String body = response.getEntity() == null ? null : EntityUtils.toString(response.getEntity());
             if (code == successCode) {
@@ -207,7 +207,6 @@ public class ApiClient {
     public class JsonCollection implements Iterator<ObjectNode>, Iterable<ObjectNode> {
         private String path;
         private String filter;
-        private HttpClient httpClient = getDefaultHTTPClient();
         private int totalResults = -1;
         private int startIndex;
         private ArrayNode resources;
