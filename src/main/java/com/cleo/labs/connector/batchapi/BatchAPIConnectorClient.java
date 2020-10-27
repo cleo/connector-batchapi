@@ -12,6 +12,7 @@ import static com.cleo.connector.api.command.ConnectorCommandOption.Unique;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributeView;
@@ -33,6 +34,7 @@ import com.cleo.connector.api.directory.Entry;
 import com.cleo.connector.api.helper.Attributes;
 import com.cleo.connector.api.interfaces.IConnectorIncoming;
 import com.cleo.connector.api.interfaces.IConnectorOutgoing;
+import com.cleo.connector.file.FileAttributes;
 
 public class BatchAPIConnectorClient extends ConnectorClient {
     private BatchAPIConnectorConfig config;
@@ -162,10 +164,17 @@ public class BatchAPIConnectorClient extends ConnectorClient {
     @Command(name = ATTR)
     public BasicFileAttributeView getAttributes(String path) throws ConnectorException, IOException {
         try {
-            return new ActualFileAttributes(config.getWorkingDirectory().resolve(path));
-        } catch (Exception e) {
-            throw new IOException(e);
+            Path rootPath = config.getWorkingDirectory();
+            Path fullPath = rootPath.resolve(path);
+            File file = fullPath.toFile();
+            if (file.exists()) {
+                return new FileAttributes(file);
+            }
+        } catch (InvalidPathException ipEx) {
+            // turn this exception into fileNonExistentOrNoAccess -- others will be thrown
         }
+        throw new ConnectorException(String.format("'%s' does not exist or is not accessible", path),
+                ConnectorException.Category.fileNonExistentOrNoAccess);
     }
 
 }

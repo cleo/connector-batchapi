@@ -20,10 +20,14 @@ public class BatchAPIConnectorConfig {
         this.schema = schema;
     }
 
-    public Path getWorkingDirectory() throws Exception {
-        String value = schema.workingDirectory.getValue(client);
-        String macros = new MacroReplacement().replaceMacrosInString(value, MacroUtil.DIRS_ONLY, true);
-        return Paths.get(macros);
+    public Path getWorkingDirectory() throws ConnectorPropertyException {
+        try {
+            String value = schema.workingDirectory.getValue(client);
+            String macros = new MacroReplacement().replaceMacrosInString(value, MacroUtil.DIRS_ONLY, true);
+            return Paths.get(macros);
+        } catch (Exception e) {
+            throw new ConnectorPropertyException(e);
+        }
     }
 
     public Profile[] getProfiles() throws ConnectorPropertyException {
