@@ -1231,7 +1231,7 @@ public class BatchProcessor {
         ObjectNode actions = Json.mapper.createObjectNode();
         actions.set(alias, request.entry);
         actions = createActions(actions, parent);
-        results.add((ObjectNode)actions.get(alias));
+        results.add(insertResult(actionOfficial2Batch((ObjectNode)actions.get(alias)), true, "created "+request.resource, request));
     }
 
     private void processAdd(Request request, List<ObjectNode> results, ArrayNode passwords) throws Exception {
@@ -1406,10 +1406,12 @@ public class BatchProcessor {
 
         int i = 1;
         for (ObjectNode action : list) {
-            String message = String.format("%s action %s (%d of %d)",
+            String message = String.format("%s action %s",
                     request.operation.tag(),
-                    Json.getSubElementAsText(action, "alias"),
-                    i++, list.size());
+                    Json.getSubElementAsText(action, "alias"));
+            if (list.size() > 1) {
+                message = String.format("%s (%d of %d)", message, i++, list.size());
+            }
             results.add(insertResult(actionOfficial2Batch(action), true, message, request));
         }
         return list;

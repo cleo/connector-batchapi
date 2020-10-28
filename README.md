@@ -173,7 +173,7 @@ The batch API utility includes an option for generating random passwords instead
 * 5 randomly selected digits
 * 1 randomly selected separator
 * 5 randomly selected lower case letters
-* 1 randomly selected separato
+* 1 randomly selected separator
 * 5 randomly selected digits
 
 An example generated password might be `FEWSH_77121|denco+13057`. This format ensures that most length and complexity requirements can be met, while also providing over 89 bits of entropy.
