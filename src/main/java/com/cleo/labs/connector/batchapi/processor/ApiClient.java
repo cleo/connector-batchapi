@@ -156,9 +156,9 @@ public class ApiClient {
 
     private ObjectNode post(JsonNode entity, URI uri, int success) throws Exception {
         HttpPost post = new HttpPost(uri);
+        post.addHeader("content-type", "application/json");
         if (entity != null && !entity.isMissingNode()) {
             post.setEntity(new StringEntity(entity.toString()));
-            post.addHeader("content-type", "application/json");
         }
         if (traceRequests) {
             String href = uri.toString().replaceFirst("^.*?[^/](?=/[^/])", "");
@@ -177,9 +177,9 @@ public class ApiClient {
 
     private ObjectNode put(JsonNode entity, URI uri) throws Exception {
         HttpPut put = new HttpPut(uri);
+        put.addHeader("content-type", "application/json");
         if (entity != null && !entity.isMissingNode()) {
             put.setEntity(new StringEntity(entity.toString()));
-            put.addHeader("content-type", "application/json");
         }
         if (traceRequests) {
             String href = uri.toString().replaceFirst("^.*?[^/](?=/[^/])", "");
