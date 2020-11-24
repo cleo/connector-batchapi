@@ -1381,28 +1381,7 @@ public class BatchProcessor {
      */
     private List<ObjectNode> processListActions(Request request, List<ObjectNode> results) throws Exception {
         List<ObjectNode> list;
-        if (request.resource != null && request.resourceClass == ResourceClass.any ||
-                request.resourceFilter != null) {
-            // loop over the underlying resources
-            list = new ArrayList<>();
-            String action = request.action;
-            String actionFilter = request.actionFilter;
-            request.action = null;
-            request.actionFilter = null;
-            List<ObjectNode> tempResults = new ArrayList<>();
-            for (ObjectNode resource : processList(request, tempResults)) {
-                Request inner = new Request();
-                inner.operation = request.operation;
-                inner.action = action;
-                inner.actionFilter = actionFilter;
-                inner.resource = getObjectName(resource);
-                inner.resourceClass = ResourceClass.valueOf(Json.getSubElementAsText(resource, "meta.resourceType"));
-                inner.entry = resource;
-                list.addAll(listActions(inner));
-            }
-        } else {
-            list = listActions(request);
-        }
+        list = listActions(request);
 
         int i = 1;
         for (ObjectNode action : list) {
