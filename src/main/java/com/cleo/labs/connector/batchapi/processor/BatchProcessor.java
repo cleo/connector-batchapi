@@ -546,8 +546,7 @@ public class BatchProcessor {
                 "active",
                 "editable",
                 "runnable",
-                "ready",
-                "notReadyReason",
+                "ready=true",
                 "enabled=true",
                 "home.enabled=true",
                 "home.dir.default=local/root/%username%",
@@ -638,8 +637,7 @@ public class BatchProcessor {
                 "active",
                 "editable",
                 "runnable",
-                "ready",
-                "notReadyReason",
+                "ready=true",
                 "enabled=true",
                 "meta",
                 "_links");
@@ -1496,8 +1494,7 @@ public class BatchProcessor {
         request.csvdata = (ObjectNode)request.entry.remove("csvdata");
 
         // remove other stuff that might be from a reflected result
-        request.entry.remove("result");
-        request.entry.remove("id");
+        request.entry.remove(Arrays.asList("result", "id", "ready", "notReadyReason"));
 
         // see if there is a filter (and remove it from the entry)
         request.resourceFilter = Json.asText(request.entry.remove("filter"));
