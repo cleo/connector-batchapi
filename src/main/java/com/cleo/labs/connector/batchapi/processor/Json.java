@@ -1,5 +1,8 @@
 package com.cleo.labs.connector.batchapi.processor;
 
+import java.util.Iterator;
+import java.util.Map.Entry;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -146,6 +149,19 @@ public class Json {
                         subnode.remove(keys[i]);
                     }
                 }
+            }
+        }
+        return node;
+    }
+
+    public static ObjectNode mergeUpdates(ObjectNode node, ObjectNode updates) {
+        Iterator<Entry<String,JsonNode>> fields = updates.fields();
+        while (fields.hasNext()) {
+            Entry<String,JsonNode> field = fields.next();
+            if (node.has(field.getKey()) && node.get(field.getKey()).isObject() && field.getValue().isObject()) {
+                mergeUpdates((ObjectNode)node.get(field.getKey()), (ObjectNode)field.getValue());
+            } else {
+                node.set(field.getKey(), field.getValue());
             }
         }
         return node;

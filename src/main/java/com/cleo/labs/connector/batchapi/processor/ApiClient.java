@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -320,19 +321,19 @@ public class ApiClient {
     }
 
     public ObjectNode importOrGetCert(JsonNode certJson) throws Exception {
-        X509Certificate cert = CertUtils.cert(Json.getSubElementAsText(certJson, "certificate"));
-        String base64 = CertUtils.base64(cert);
-        if (base64 == null) {
+        Optional<X509Certificate> cert = CertUtils.cert(Json.getSubElementAsText(certJson, "certificate"));
+        Optional<String> base64 = CertUtils.base64(cert);
+        if (!base64.isPresent()) {
             throw new ProcessingException("unable to parse certificate");
         }
         ObjectNode importCert = Json.mapper.createObjectNode();
         importCert.put("requestType", "importCert");
-        importCert.put("import", base64);
+        importCert.put("import", base64.get());
         try {
             return post(importCert, CERTS_URL);
         } catch (UnexpectedCodeException e) {
             if (e.code() == HttpURLConnection.HTTP_CONFLICT) {
-                String serial = cert.getSerialNumber().toString(16);
+                String serial = cert.get().getSerialNumber().toString(16);
                 JsonCollection certs = new JsonCollection(CERTS_URL, "serialNumber eq \""+serial+"\"");
                 for (ObjectNode c : certs) {
                     if (c.path("hasPrivateKey").asBoolean()) {

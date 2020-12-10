@@ -6,13 +6,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import com.google.common.base.Strings;
 import com.google.common.io.ByteStreams;
@@ -78,7 +82,7 @@ public class CertUtils {
         return result;
     }
 
-    private static byte[] bytes(byte[] buffer) {
+    private static List<byte[]> bytes(byte[] buffer) {
         byte[] header = findHeader(buffer);
         byte[] trailer = trailer(header);
         boolean foundTrailer = false;
@@ -86,33 +90,46 @@ public class CertUtils {
         int start = header.length;
         int i = 0;
         int size = 0;
-        while (base64 && !foundTrailer && i < buffer.length) {
-            if (BASE64_CHARS.contains(buffer[i])) {
-                if (!EOL_CHARS.contains(buffer[i])) {
-                    size++;
+        List<byte[]> results = new ArrayList<>();
+        while (base64 && i < buffer.length) {
+            while (base64 && !foundTrailer && i < buffer.length) {
+                if (BASE64_CHARS.contains(buffer[i])) {
+                    if (!EOL_CHARS.contains(buffer[i])) {
+                        size++;
+                    }
+                    i++;
+                } else if (header.length>0 && matchesAt(buffer, i, trailer)) {
+                    foundTrailer = true;
+                    i += trailer.length;
+                    while (i < buffer.length && EOL_CHARS.contains(buffer[i])) {
+                        i++;
+                    }
+                    if (matchesAt(buffer, i, header)) {
+                        i += header.length;
+                    }
+                } else {
+                    base64 = false;
                 }
-            } else if (header.length>0 && matchesAt(buffer, i, trailer)) {
-                foundTrailer = true;
-            } else {
-                base64 = false;
             }
-            i++;
-        }
-        if (base64 && (header.length==0 || foundTrailer) && size > 0) {
-            byte[] result = new byte[size];
-            int k=0;
-            for (int j=start; k < size; j++) {
-                if (BASE64_CHARS.contains(buffer[j]) && !EOL_CHARS.contains(buffer[j])) {
-                    result[k++] = buffer[j];
+            if (base64 && (header.length==0 || foundTrailer) && size > 0) {
+                byte[] result = new byte[size];
+                int k=0;
+                for (int j=start; k < size; j++) {
+                    if (BASE64_CHARS.contains(buffer[j]) && !EOL_CHARS.contains(buffer[j])) {
+                        result[k++] = buffer[j];
+                    }
+                }
+                try {
+                    results.add(Base64.getDecoder().decode(result));
+                } catch (Exception e) {
+                    // fall through and return the original
                 }
             }
-            try {
-                return Base64.getDecoder().decode(result);
-            } catch (Exception e) {
-                // fall through and return the original
-            }
         }
-        return buffer;
+        if (results.isEmpty()) {
+            results.add(buffer); // didn't find any base64 so return original
+        }
+        return results;
     }
 
     /**
@@ -123,41 +140,62 @@ public class CertUtils {
      *     <li>a base 64 encoded certificate (as might be returned by the Harmony API></li>
      *     <li>a base 64 encoded certificate with BEGIN and END headers and folded lines,
      *         (as might be produced by a tool such as {@code openssl}</li>
+     *     <li>a list of base 64 encoded certificates enclosed in BEGIN/END headers</li>
      *     <li>a binary {@code .p7b} file (a PKCS#7 file with a cert bundle)&mdash;
      *         the first end-entity certificate encountered will be returned from
      *         the bundle</li>
      *  </ul>
      * @param buffer the buffer to parse
-     * @return an X509Certificate, or {@code null} if none of the above are recognized
+     * @return an Optional<X509Certificate>
      */
-    public static X509Certificate cert(byte[] buffer) {
-        buffer = bytes(buffer);
-        try (InputStream is = new ByteArrayInputStream(buffer)) {
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            return (X509Certificate)cf.generateCertificate(is);
-        } catch (Exception e) {
-            // ignore -- try p7b
+    public static Optional<X509Certificate> cert(byte[] buffer) {
+        List<byte[]> binaries = bytes(buffer);
+        List<X509Certificate> certs = new ArrayList<>();
+        CertificateFactory cf;
+        try {
+            cf = CertificateFactory.getInstance("X.509");
+        } catch (CertificateException ce) {
+            // not gonna happen, but...
+            return Optional.empty();
         }
-        try (InputStream is = new ByteArrayInputStream(buffer)) {
-            PKCS7CertList list = new PKCS7CertList(is);
-            X509Certificate[] certs = list.getCertificateList();
-            Set<String> issuers = Stream.of(certs).map(c -> c.getIssuerX500Principal().getName()).collect(Collectors.toSet());
-            X509Certificate[] eeCerts = Stream.of(certs).filter(c -> !issuers.contains(c.getSubjectX500Principal().getName())).toArray(X509Certificate[]::new);
-            return eeCerts[0];
-        } catch (Exception e) {
-            e.printStackTrace();
-            // out of ideas -- fall through to return null
+        for (byte[] binary : binaries) {
+            try (InputStream is = new ByteArrayInputStream(binary)) {
+                certs.add((X509Certificate)cf.generateCertificate(is));
+            } catch (Exception e) {
+                // try p7b instead
+                try (InputStream is = new ByteArrayInputStream(binary)) {
+                    PKCS7CertList list = new PKCS7CertList(is);
+                    certs.addAll(Arrays.asList(list.getCertificateList()));
+                } catch (Exception f) {
+                    e.printStackTrace();
+                    // out of ideas -- fall through and see what else is in binaries
+                }
+            }
         }
-        return null;
+        if (certs.size() == 0) {
+            return Optional.empty();
+        } else if (certs.size() == 1) {
+            return Optional.of(certs.get(0));
+        }
+        // if multiple certs, eliminate the referenced issuers and return the first EE cert
+        Set<String> issuers = certs.stream().map(c -> c.getIssuerX500Principal().getName()).collect(Collectors.toSet());
+        Optional<X509Certificate> result = certs.stream()
+                .filter(c -> !issuers.contains(c.getSubjectX500Principal().getName()))
+                .findFirst();
+        if (result.isPresent()) {
+            return result;
+        }
+        // if they were all referenced issuers, just return the first one
+        return Optional.of(certs.get(0));
     }
 
     /**
      * Analyzes the contents of a file indicated by a path name as
      * described for {@link #cert(byte[])}.
      * @param path the path of the file to read
-     * @return an X509Certificate, or {@code null}
+     * @return an Optional<X509Certificate>
      */
-    public static X509Certificate cert(Path path) {
+    public static Optional<X509Certificate> cert(Path path) {
         byte[] buffer;
         try (InputStream is = new FileInputStream(path.toFile())) {
             buffer = ByteStreams.toByteArray(is);
@@ -165,15 +203,15 @@ public class CertUtils {
         } catch (IOException e) {
             // fall through to return null
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
      * Analyzes the contents of a String as described for {@link #cert(byte[])}.
      * @param s the String to analyze
-     * @return an X509Certificate, or {@code null}
+     * @return an Optional<X509Certificate>
      */
-    public static X509Certificate cert(String s) {
+    public static Optional<X509Certificate> cert(String s) {
         return cert(s.getBytes());
     }
 
@@ -191,6 +229,23 @@ public class CertUtils {
             return Base64.getEncoder().encodeToString(cert.getEncoded());
         } catch (CertificateEncodingException e) {
             return null;
+        }
+    }
+
+    /**
+     * Returns the base 64 encoding of a certificate, or
+     * {@code null} if there is an encoding error.
+     * @param cert the certificate to encode
+     * @return an Optional base 64 string
+     */
+    public static Optional<String> base64(Optional<X509Certificate> cert) {
+        if (!cert.isPresent()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(Base64.getEncoder().encodeToString(cert.get().getEncoded()));
+        } catch (CertificateEncodingException e) {
+            return Optional.empty();
         }
     }
 

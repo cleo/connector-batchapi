@@ -319,7 +319,7 @@ public class BatchProcessor {
         } else {
             throw new ProcessingException("can't update "+original.toString());
         }
-        updated.setAll(officialUpdates);
+        Json.mergeUpdates(updated, officialUpdates);
         //cleanup(updated);
         ObjectNode officialResult = api.put(updated, original);
         if (type.equals("user")) {
@@ -362,7 +362,7 @@ public class BatchProcessor {
 
         // merge in the updates: note we are in Batch form
         ObjectNode updateActions = (ObjectNode)updates.remove("actions");
-        add.entry.setAll(updates);
+        Json.mergeUpdates(add.entry, updates);
         if (updateActions != null && updateActions.size() > 0) {
             ObjectNode entryActions = (ObjectNode)add.entry.get("actions");
             if (entryActions == null || entryActions.size() == 0) {
@@ -825,6 +825,8 @@ public class BatchProcessor {
                     ObjectNode imported = api.importOrGetCert(object);
                     object.put("href", Json.getHref(imported));
                     object.remove("certificate");
+                } else {
+                    certsImportBatch2Official(object);
                 }
             }
         }
@@ -1277,7 +1279,7 @@ public class BatchProcessor {
                 renames != null &&
                 renames.has("authenticator");
         if (renames != null) {
-            update.setAll(renames);
+            Json.mergeUpdates(update, renames);
         }
 
         // run the query
