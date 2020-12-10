@@ -795,6 +795,8 @@ public class BatchProcessor {
             if (href != null && href.startsWith("/api/certs/")) {
                 ObjectNode cert = api.get(href);
                 ((ObjectNode)field).put("certificate", CertUtils.export(Json.getSubElementAsText(cert, "certificate")));
+            } else if (field.isObject()) {
+                certsExpandOfficial2Batch((ObjectNode)field);
             }
         }
     }
