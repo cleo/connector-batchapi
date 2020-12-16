@@ -673,10 +673,25 @@ The `certificate` property is a string, and the batch utility will accept severa
 * a single base64-encoded string all on one line `certificate: MIIDQzCCAiugAwIBAgIQLGG6JR...k9N1BWH+0=`
 * a multi-line base64-encoded string, as illustrated above for `partnerSigningCert`
 * a multi-line base64-encoded string framed in `BEGIN` and `END` delimiters, as illustrated above for `partnerEncryptionCert` (this is the typical `.crt` or PEM format used by tools such as `openssl`)
+* a list of multi-line base64-encoded strings framed in `BEGIN` and `END` delimiters (this is sometimes used to represent a certificate and its chain of issuers)
 
 The certificate may be a single stand-alone certificate, represented in PEM format as:
 
 ```
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+```
+
+or a list of PEM certificates:
+
+```
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
 -----BEGIN CERTIFICATE-----
 ...
 -----END CERTIFICATE-----
@@ -690,7 +705,7 @@ or it may be part of a PKCS#7 certificate chain, typically found in file names e
 -----END PKCS7-----
 ```
 
-When processing a PKCS#7 certificate chain, any issuer certificates are ignored and the final "end entity" certificate is used (if for some reason there are multiple "end entity" certificates in the bundle, the first one is used).
+When processing a PKCS#7 certificate chain or a list of PEM certificates, the final "end entity" certificate is used (if for some reason there are multiple "end entity" certificates in the bundle, the first one is used) as the certificate that is linked to the connection. Any remaining certificates are imported into the certificate manager, typically the issuer chain, but are not referenced in the connection.
 
 If the certificate is already imported into Harmony, the existing certificate "href" reference is reused and an additional cross-reference is added to the certificate's `usage` links (see [`GET certs/{certid}`](https://developer.cleo.com/api/api-reference/get-certs-certid.html)).
 

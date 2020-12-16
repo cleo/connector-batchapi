@@ -176,7 +176,7 @@ public class TestCertUtils {
 
     @Test
     public void testb1() throws Exception {
-        X509Certificate cert = CertUtils.cert(b1).orElse(null);
+        X509Certificate cert = CertUtils.cert(b1).cert();
         PublicKey key = cert.getPublicKey();
         assertTrue(key instanceof RSAPublicKey);
         assertEquals(65537, ((RSAPublicKey)key).getPublicExponent().intValue());
@@ -184,7 +184,7 @@ public class TestCertUtils {
     }
     @Test
     public void testc1() throws Exception {
-        X509Certificate cert = CertUtils.cert(c1).orElse(null);
+        X509Certificate cert = CertUtils.cert(c1).cert();
         PublicKey key = cert.getPublicKey();
         assertTrue(key instanceof RSAPublicKey);
         assertEquals(65537, ((RSAPublicKey)key).getPublicExponent().intValue());
@@ -192,7 +192,7 @@ public class TestCertUtils {
     }
     @Test
     public void testc2() throws Exception {
-        X509Certificate cert = CertUtils.cert(c2).orElse(null);
+        X509Certificate cert = CertUtils.cert(c2).cert();
         PublicKey key = cert.getPublicKey();
         assertTrue(key instanceof RSAPublicKey);
         assertEquals(65537, ((RSAPublicKey)key).getPublicExponent().intValue());
@@ -201,7 +201,7 @@ public class TestCertUtils {
     @Test
     public void testc3() throws Exception {
         assertNotEquals(c3, c2);
-        X509Certificate cert = CertUtils.cert(c3).orElse(null);
+        X509Certificate cert = CertUtils.cert(c3).cert();
         PublicKey key = cert.getPublicKey();
         assertTrue(key instanceof RSAPublicKey);
         assertEquals(65537, ((RSAPublicKey)key).getPublicExponent().intValue());
@@ -211,7 +211,7 @@ public class TestCertUtils {
     @Test
     public void testc4() throws Exception {
         assertNotEquals(c4, c2);
-        X509Certificate cert = CertUtils.cert(c4).orElse(null);
+        X509Certificate cert = CertUtils.cert(c4).cert();
         PublicKey key = cert.getPublicKey();
         assertTrue(key instanceof RSAPublicKey);
         assertEquals(65537, ((RSAPublicKey)key).getPublicExponent().intValue());
@@ -220,19 +220,25 @@ public class TestCertUtils {
 
     @Test
     public void testc5() throws Exception {
-        X509Certificate cert = CertUtils.cert(c5).orElse(null);
+        assertEquals(4, CertUtils.bytes(c5).size());
+        assertEquals(4, CertUtils.certs(c5).size());
+        CertUtils.CertWithBundle bundle = CertUtils.cert(c5);
+        X509Certificate cert = bundle.cert();
         PublicKey key = cert.getPublicKey();
         assertTrue(key instanceof RSAPublicKey);
         assertEquals(65537, ((RSAPublicKey)key).getPublicExponent().intValue());
         assertNotNull(CertUtils.export(cert));
+        assertEquals(3, bundle.bundle().size());
     }
 
     @Test
     public void test7() throws Exception {
-        X509Certificate cert = CertUtils.cert(Paths.get("chain.p7b")).orElse(null);
+        CertUtils.CertWithBundle bundle = CertUtils.cert(Paths.get("src", "test", "resources", "chain.p7b"));
+        X509Certificate cert = bundle.cert();
         PublicKey key = cert.getPublicKey();
         assertTrue(key instanceof RSAPublicKey);
         assertEquals(65537, ((RSAPublicKey)key).getPublicExponent().intValue());
         assertNotNull(CertUtils.export(cert));
+        assertEquals(2, bundle.bundle().size());
     }
 }

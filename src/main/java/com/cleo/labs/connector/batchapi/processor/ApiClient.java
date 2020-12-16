@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -321,31 +320,53 @@ public class ApiClient {
     }
 
     public ObjectNode importOrGetCert(JsonNode certJson) throws Exception {
-        Optional<X509Certificate> cert = CertUtils.cert(Json.getSubElementAsText(certJson, "certificate"));
-        Optional<String> base64 = CertUtils.base64(cert);
-        if (!base64.isPresent()) {
+        CertUtils.CertWithBundle bundle;
+        try {
+            bundle = CertUtils.cert(Json.getSubElementAsText(certJson, "certificate"));
+        } catch (Exception e) {
+            throw new ProcessingException("unable to parse certificate", e);
+        }
+        if (bundle.cert() == null) {
             throw new ProcessingException("unable to parse certificate");
         }
+        String base64 = CertUtils.base64(bundle.cert());
         ObjectNode importCert = Json.mapper.createObjectNode();
         importCert.put("requestType", "importCert");
-        importCert.put("import", base64.get());
+        importCert.put("import", base64);
+        ObjectNode result;
         try {
-            return post(importCert, CERTS_URL);
+            result = post(importCert, CERTS_URL);
         } catch (UnexpectedCodeException e) {
             if (e.code() == HttpURLConnection.HTTP_CONFLICT) {
-                String serial = cert.get().getSerialNumber().toString(16);
+                String serial = bundle.cert().getSerialNumber().toString(16);
                 JsonCollection certs = new JsonCollection(CERTS_URL, "serialNumber eq \""+serial+"\"");
                 for (ObjectNode c : certs) {
                     if (c.path("hasPrivateKey").asBoolean()) {
                         continue;
                     }
                     if (base64.equals(Json.getSubElementAsText(c, "certificate"))) {
-                        return c;
+                        result = c;
+                        break;
                     }
                 }
             }
             throw e;
         }
+        // now import the bundle, if any, ignoring conflict exceptions
+        for (X509Certificate cert : bundle.bundle()) {
+            importCert.removeAll();
+            importCert.put("requestType", "importCert");
+            importCert.put("import", CertUtils.base64(cert));
+            try {
+                post(importCert, CERTS_URL);
+            } catch (UnexpectedCodeException e) {
+                if (e.code() != HttpURLConnection.HTTP_CONFLICT) {
+                    throw e;
+                }
+            }
+        }
+        // return result
+        return result;
     }
 
     private ObjectNode getResource(String resourcePath, String keyAttribute, String key) throws Exception {

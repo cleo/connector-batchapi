@@ -4,9 +4,13 @@ public class ProcessingException extends Exception {
     /**
      * Exception processing an entry
      */
-    private static final long serialVersionUID = 8577432753434980463L;
+    private static final long serialVersionUID = 3819802216328740863L;
 
     public ProcessingException(String message) {
         super(message);
+    }
+
+    public ProcessingException(String message, Throwable cause) {
+        super(message, cause);
     }
 }
