@@ -55,6 +55,8 @@ public class CsvExpander {
                         // skip quietly
                     } else if (result.expanded().isArray()) {
                         result.expanded().forEach(n -> output.add((ObjectNode)n));
+                    } else if (!result.expanded().isObject()) {
+                        output.add(Json.mapper.createObjectNode().put("error", "bad template: "+result.expanded().toString()));
                     } else {
                         output.add((ObjectNode)result.expanded());
                     }
