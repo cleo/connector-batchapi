@@ -333,7 +333,7 @@ public class ApiClient {
         ObjectNode importCert = Json.mapper.createObjectNode();
         importCert.put("requestType", "importCert");
         importCert.put("import", base64);
-        ObjectNode result;
+        ObjectNode result = null;
         try {
             result = post(importCert, CERTS_URL);
         } catch (UnexpectedCodeException e) {
@@ -350,7 +350,9 @@ public class ApiClient {
                     }
                 }
             }
-            throw e;
+            if (result == null) {
+                throw e;
+            }
         }
         // now import the bundle, if any, ignoring conflict exceptions
         for (X509Certificate cert : bundle.bundle()) {
