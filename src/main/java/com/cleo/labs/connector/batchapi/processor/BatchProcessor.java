@@ -1233,7 +1233,7 @@ public class BatchProcessor {
         ObjectNode actions = Json.mapper.createObjectNode();
         actions.set(alias, request.entry);
         actions = createActions(actions, parent);
-        results.add(insertResult(actionOfficial2Batch((ObjectNode)actions.get(alias)), true, "created "+request.resource, request));
+        results.add(insertResult(actionOfficial2Batch((ObjectNode)actions.get(alias)), true, "created "+alias, request));
     }
 
     private void processAdd(Request request, List<ObjectNode> results, ArrayNode passwords) throws Exception {
