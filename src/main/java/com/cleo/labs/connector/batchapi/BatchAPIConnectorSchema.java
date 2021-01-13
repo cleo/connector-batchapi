@@ -75,7 +75,7 @@ public class BatchAPIConnectorSchema extends ConnectorConfig {
     final IConnectorProperty<String> template = new PropertyBuilder<>("Template", "")
             .setDescription("Explicit template to use when processing CSV request files")
             .setGroup(Connect)
-            .setExtendedClass(TemplateImport.class)
+            .setExtendedClass(BinaryConfigFileImport.class)
             .setRequired(false)
             .build();
 
@@ -95,7 +95,7 @@ public class BatchAPIConnectorSchema extends ConnectorConfig {
     final IConnectorProperty<String> outputTemplate = new PropertyBuilder<>("OutputTemplate", "")
             .setDescription("Template to use when formatting CSV response files")
             .setGroup(Connect)
-            .setExtendedClass(TemplateImport.class)
+            .setExtendedClass(BinaryConfigFileImport.class)
             .setRequired(false)
             .build();
 

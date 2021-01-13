@@ -52,7 +52,7 @@ public class BatchAPIConnectorConfig {
     }
 
     public String getTemplate() throws ConnectorPropertyException {
-        return TemplateImport.value(schema.template.getValue(client));
+        return BinaryConfigFileImport.valueString(schema.template.getValue(client));
     }
 
     public OutputFormat getOutputFormat() throws ConnectorPropertyException {
@@ -64,7 +64,7 @@ public class BatchAPIConnectorConfig {
     }
 
     public String getOutputTemplate() throws ConnectorPropertyException {
-        return TemplateImport.value(schema.outputTemplate.getValue(client));
+        return BinaryConfigFileImport.valueString(schema.outputTemplate.getValue(client));
     }
 
     public boolean getEnableDebug() throws ConnectorPropertyException {

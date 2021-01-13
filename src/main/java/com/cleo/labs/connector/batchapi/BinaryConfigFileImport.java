@@ -11,7 +11,7 @@ import com.cleo.connector.api.annotations.Display;
 import com.cleo.connector.api.annotations.Setter;
 import com.google.gwt.thirdparty.guava.common.io.ByteStreams;
 
-public class TemplateImport {
+public class BinaryConfigFileImport {
     private static final DateFormat DATEFORMAT = new SimpleDateFormat("'Imported on' yyyy/MM/dd HH:mm:ss");
     public static final String DELIMITER = "@@@";
 
@@ -31,12 +31,16 @@ public class TemplateImport {
         return value;
     }
 
-    public static String value(String value) {
+    public static byte[] value(String value) {
         if (value != null && value.contains(DELIMITER)) {
-            value = value.substring(value.indexOf(DELIMITER) + DELIMITER.length());
-            value = new String(Base64.getDecoder().decode(value));
+            return Base64.getDecoder().decode(
+                    value.substring(value.indexOf(DELIMITER) + DELIMITER.length()));
         }
-        return value;
+        return new byte[0];
+    }
+
+    public static String valueString(String value) {
+        return new String(value(value));
     }
 
 }
