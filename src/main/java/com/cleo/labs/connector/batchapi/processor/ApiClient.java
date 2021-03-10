@@ -339,6 +339,9 @@ public class ApiClient {
         } catch (UnexpectedCodeException e) {
             if (e.code() == HttpURLConnection.HTTP_CONFLICT) {
                 String serial = bundle.cert().getSerialNumber().toString(16);
+                if (serial.length() % 2 == 1) {
+                    serial = "0"+serial; // Harmony stores full octets, including leading 0
+                }
                 JsonCollection certs = new JsonCollection(CERTS_URL, "serialNumber eq \""+serial+"\"");
                 for (ObjectNode c : certs) {
                     if (c.path("hasPrivateKey").asBoolean()) {
