@@ -5,7 +5,7 @@
 
   <groupId>com.cleo.labs.connector</groupId>
   <artifactId>connector-batchapi</artifactId>
-  <version>0.9-RC8-SNAPSHOT</version>
+  <version>0.9-RC8</version>
   <packaging>jar</packaging>
 
   <name>connector-batchapi</name>
