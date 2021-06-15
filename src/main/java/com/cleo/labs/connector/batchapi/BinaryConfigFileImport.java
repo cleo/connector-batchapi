@@ -9,7 +9,7 @@ import java.util.Date;
 
 import com.cleo.connector.api.annotations.Display;
 import com.cleo.connector.api.annotations.Setter;
-import com.google.gwt.thirdparty.guava.common.io.ByteStreams;
+import com.google.common.io.ByteStreams;
 
 public class BinaryConfigFileImport {
     private static final DateFormat DATEFORMAT = new SimpleDateFormat("'Imported on' yyyy/MM/dd HH:mm:ss");
