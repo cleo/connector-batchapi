@@ -7,7 +7,7 @@ import com.cleo.lexicom.beans.LexBean;
 import com.cleo.lexicom.external.ILexiCom;
 import com.cleo.lexicom.external.LexiComFactory;
 import com.cleo.security.encryption.ConfigEncryption;
-import com.google.gwt.thirdparty.guava.common.base.Strings;
+import com.google.common.base.Strings;
 
 public class RealVersaLex implements VersaLex {
 
